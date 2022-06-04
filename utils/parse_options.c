@@ -66,7 +66,7 @@ stegobmp_configuration_ptr parse_options(int argc, char *argv[]) {
             {"in",      required_argument,  0,  'i' },
             {"out",     required_argument,  0,  'o' },
             {"steg",    required_argument,  0,  's' },
-            {"pass",    optional_argument,  0,  'k' },
+            {"pass",    required_argument,  0,  'k' },
             {0, 0, 0, 0 }
     };
     //hp:a:m:vexi:o:s:k:
@@ -100,6 +100,7 @@ stegobmp_configuration_ptr parse_options(int argc, char *argv[]) {
             stegobmp_config->encryption_mode = optarg;
             break;
         case 'k':
+            printf("%s\n", optarg);
             stegobmp_config->password = optarg;
             break;
         case 'v':
