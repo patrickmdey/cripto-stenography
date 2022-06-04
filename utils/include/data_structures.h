@@ -11,7 +11,7 @@ typedef struct stegobmp_configuration_t {
     char *encryption_algo;
     char *encryption_mode;
     char *password;
-    int isEmbed;
+    uint8_t is_embed;
 } stegobmp_configuration;
 
 typedef int fd;

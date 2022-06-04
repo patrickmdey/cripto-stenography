@@ -9,6 +9,6 @@
 #include <data_structures.h>
 #include <ctype.h>
 
-proxy_configuration_ptr parse_options(int argc, char *argv[]);
+stegobmp_configuration_ptr parse_options(int argc, char *argv[]);
 
 #endif

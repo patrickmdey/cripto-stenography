@@ -1,12 +1,9 @@
-// This is a personal academic project. Dear PVS-Studio, please check it.
-// PVS-Studio Static Code Analyzer for C, C++ and C#: http://www.viva64.com
 #include <parse_options.h>
 
-
-#define HAS_VALID_ARG(k) ((k) == 'in' || (k) == 'out' || (k) == 'steg' || (k) == 'p' || (k) == 'a' || (k) == 'm' || (k) == 'pass' || (k) == 't')
+#define HAS_VALID_ARG(k) ((k) == 'i' || (k) == 'o' || (k) == 's' || (k) == 'p' || (k) == 'a' || (k) == 'm' || (k) == 'k')
 enum ERROR_CODES { STATUS_SUCCESS, STATUS_ERROR };
 
-void print_proxy_version(int argc) {
+void print_stegobmp_version(int argc) {
     if(argc == 2) {
         printf("STEGOBMP Version: %s\n", VERSION_NUMBER);
         exit(STATUS_SUCCESS);
@@ -34,7 +31,6 @@ void print_usage() {
            "\t-v Prints out the STEGOBMP version\n"
            );
 }
-
 void print_help() {
     printf("\n-------------------------- HELP --------------------------\n");
     print_usage();
@@ -54,7 +50,7 @@ stegobmp_configuration_ptr init_stegobmp_config() {
     stegobmp_config->encryption_algo    = NULL;
     stegobmp_config->encryption_mode    = NULL;
     stegobmp_config->password           = NULL;
-    stegobmp_config->isEmbed            = -1;
+    stegobmp_config->is_embed           = 0;
 
     return stegobmp_config;
 }
@@ -63,27 +59,38 @@ stegobmp_configuration_ptr parse_options(int argc, char *argv[]) {
     stegobmp_configuration_ptr stegobmp_config = init_stegobmp_config();
     int option;
 
-    while((option = getopt(argc, argv, "hembedextractin:out:p:steg:a:m:pass:v")) != -1) {
+    int option_index = 0;
+    static struct option long_options[] = {
+            {"embed",   no_argument,        0,  'e' },
+            {"extract", no_argument,        0,  'x' },
+            {"in",      required_argument,  0,  'i' },
+            {"out",     required_argument,  0,  'o' },
+            {"steg",    required_argument,  0,  's' },
+            {"pass",    optional_argument,  0,  'k' },
+            {0, 0, 0, 0 }
+    };
+    //hp:a:m:vexi:o:s:k:
+    while((option = getopt_long_only(argc, argv, "hp:a:m:v", long_options, &option_index)) != -1) {
         switch (option) {
         case 'h':
             print_help();
             break;
-        case 'embed':
-            stegobmp_config->isEmbed = 1;
+        case 'e':
+            stegobmp_config->is_embed = 1;
             break;
-        case 'extract':
-            stegobmp_config->isEmbed = 0;
+        case 'x':
+            stegobmp_config->is_embed = 0;
             break;
-        case 'in':
+        case 'i':
             stegobmp_config->in_file = optarg;
             break;
-        case 'out':
+        case 'o':
             stegobmp_config->out_file = optarg;
             break;
         case 'p':
             stegobmp_config->out_file = optarg;
             break;
-        case 'steg':
+        case 's':
             stegobmp_config->steg_algo = optarg;
             break;
         case 'a':
@@ -92,22 +99,14 @@ stegobmp_configuration_ptr parse_options(int argc, char *argv[]) {
         case 'm':
             stegobmp_config->encryption_mode = optarg;
             break;
-        case 'pass':
+        case 'k':
             stegobmp_config->password = optarg;
             break;
         case 'v':
-            print_proxy_version(argc);
+            print_stegobmp_version(argc);
             break;
         case '?':
-            if(HAS_VALID_ARG(optopt)) {
-                fprintf (stderr, "Option -%c requires an argument.\n", optopt);
-            } else if(isprint(optopt)) {
-                fprintf (stderr, "Unknown option `-%c'.\n", optopt);
-            } else {
-                fprintf (stderr,"Unknown option character `\\x%x'.\n", optopt);
-            }
             break;
-
         default:
             fprintf(stderr, "Invalid options, use -h to print help\n");
             exit(STATUS_ERROR);
@@ -115,20 +114,5 @@ stegobmp_configuration_ptr parse_options(int argc, char *argv[]) {
         }
     }
 
-    if(argc - optind != 1) {
-        fprintf(stderr, "Invalid args, please use: stegbmp [ARGS]\n");
-        exit(STATUS_ERROR);
-    }
-
-    int is_invalid_arg = 0;
-    for (int index = optind; index < argc-1; index++) {
-        printf ("Invalid argument %s\n", argv[index]);
-        is_invalid_arg = 1;
-    }
-
-    if(is_invalid_arg)
-        exit(STATUS_SUCCESS);
-
-    // proxy_config->origin_server_address = argv[optind];
     return stegobmp_config;
 }
