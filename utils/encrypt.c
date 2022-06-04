@@ -1,6 +1,7 @@
 #include <encrypt.h>
 #include <string.h>
 #include <stdlib.h>
+#include <stdio.h>
 
 #include <sys/types.h>
 #include <sys/uio.h>
@@ -8,19 +9,20 @@
 
 #define BUFF_INC 1024
 
+
 int encrypt(stegobmp_configuration_ptr config) {
     int in_fd = open(config->in_file, O_RDONLY);
     // READ from file descriptor until EOF
-    char * buff = malloc(sizeof(char) * BUFF_INC);
+    char * file_data= malloc(sizeof(char) * BUFF_INC);
     int read_bytes;
     int total_read_chars = 0;
     int buff_len = BUFF_INC;
 
-    while ((read_bytes = read(in_fd, buff, BUFF_INC)) > 0) {
+    while ((read_bytes = read(in_fd, file_data, BUFF_INC)) > 0) {
         // printf("%d\n", read_bytes);
         buff_len += BUFF_INC;
-        buff = realloc(buff, buff_len);
-        if (buff == NULL) {
+        file_data= realloc(file_data, buff_len);
+        if (file_data== NULL) {
             printf("Failed allocating memory\n");
             exit(1);
         }
@@ -31,15 +33,32 @@ int encrypt(stegobmp_configuration_ptr config) {
     
     if (read_bytes == -1) {
         printf("ERROR\n");
-        free(buff);
+        free(file_data);
         exit(0);
     }
-
     
-    buff[total_read_chars] = '\0';
+    file_data[total_read_chars] = '\0';
 
+    char file_size[10];
+    itoa(total_read_chars, file_size, 10);
 
-    printf("%s\n", buff);
+    char * extension;
+    extension = strtok(config->in_file, ".");
+    printf("%s\n", extension);
+    extension = strtok(NULL, ".");
+
+    printf("%s\n", extension);
+
+    int concat_size = 4 + total_read_chars + strlen(extension+1);
+    char *concat = calloc(concat_size + 1, sizeof(char));
+
+    strcat(concat, file_size);
+    strcat(concat, file_data);
+    strcat(concat, ".");
+    strcat(concat, extension);
+    printf("%s\n",concat);
+    
+    free(file_data);
 
     unsigned char key[32], iv[32];
 
@@ -51,13 +70,13 @@ int encrypt(stegobmp_configuration_ptr config) {
         return -1;
     }
     
-    unsigned char * out = malloc(sizeof(char) * 256); 
+    unsigned char * out = malloc(sizeof(char) * 256);
     AES_set_encrypt_key(key, 256, &aes_key);
-    AES_cbc_encrypt((unsigned char *) buff, out, total_read_chars, &aes_key, iv, AES_ENCRYPT);
+    AES_cbc_encrypt((unsigned char *) concat, out, total_read_chars, &aes_key, iv, AES_ENCRYPT);
 
     out[strlen("PRUEBA")] = '\0';
     printf("%s\n", out);
     free(out);
-    free(buff);
+    free(concat);
     return 0;
 }

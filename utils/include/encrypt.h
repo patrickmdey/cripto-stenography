@@ -2,6 +2,7 @@
 #define ENCRYPT_H
 
 #include <data_structures.h>
+#include <utils.h>
 #include <fcntl.h>
 #include <openssl/evp.h>
 #include <openssl/ssl.h>
