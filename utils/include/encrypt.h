@@ -3,5 +3,12 @@
 
 #include <data_structures.h>
 #include <fcntl.h>
+#include <openssl/evp.h>
+#include <openssl/ssl.h>
+#include <openssl/rsa.h>
+#include <openssl/x509.h>
+#include <openssl/aes.h>
+
+int encrypt(stegobmp_configuration_ptr config);
 
 #endif

@@ -1,3 +1,4 @@
+include makefile.inc
 
 BINARY	= stegobmp
 SOURCES = $(wildcard *.c ./utils/*.c)

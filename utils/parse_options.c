@@ -100,7 +100,6 @@ stegobmp_configuration_ptr parse_options(int argc, char *argv[]) {
             stegobmp_config->encryption_mode = optarg;
             break;
         case 'k':
-            printf("%s\n", optarg);
             stegobmp_config->password = optarg;
             break;
         case 'v':

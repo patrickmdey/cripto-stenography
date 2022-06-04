@@ -1,9 +1,9 @@
 #include <parse_options.h>
 #include <fcntl.h>
-
-void encrypt(stegobmp_configuration_ptr config);
-void decrypt(stegobmp_configuration_ptr config);
-void steg(stegobmp_configuration_ptr config);
+#include <decrypt.h>
+#include <encrypt.h>
+#include <extract.h>
+#include <steg.h>
 
 int main(int argc, char * argv[]) {
     stegobmp_configuration_ptr config = parse_options(argc, argv);
@@ -48,6 +48,8 @@ int main(int argc, char * argv[]) {
             printf("Extract and decrypt\n");
         }
     }
+
+    free(config);
 
     return 0;
 }
