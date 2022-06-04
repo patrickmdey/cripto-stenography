@@ -22,7 +22,7 @@ int main(int argc, char * argv[]) {
                 config->encryption_algo = "aes128";
             
             if (config->encryption_mode == NULL) 
-                config->encryption_mode = "CBC";
+                config->encryption_mode = "cbc";
                 
             encrypt(config);
             steg(config);
@@ -41,7 +41,7 @@ int main(int argc, char * argv[]) {
                 config->encryption_algo = "aes128";
             
             if (config->encryption_mode == NULL) 
-                config->encryption_mode = "CBC";
+                config->encryption_mode = "cbc";
                 
             decrypt(config);
             extract(config);
