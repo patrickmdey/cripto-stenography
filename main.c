@@ -5,6 +5,8 @@
 #include <extract.h>
 #include <steg.h>
 
+#define BUFF_INC 1024
+
 int main(int argc, char * argv[]) {
     stegobmp_configuration_ptr config = parse_options(argc, argv);
 
@@ -26,7 +28,7 @@ int main(int argc, char * argv[]) {
                 
             encrypt(config);
             steg(config);
-            printf("Steg and encrypt\n");
+            // printf("Steg and encrypt\n");
         }
     } else {
         // extract from file
@@ -43,8 +45,35 @@ int main(int argc, char * argv[]) {
             if (config->encryption_mode == NULL) 
                 config->encryption_mode = "cbc";
                 
-            decrypt(config);
             extract(config);
+            int in_fd = open(config->carrier_file, O_RDONLY);
+            printf("%s\n", config->carrier_file);
+            // READ from file descriptor until EOF
+            char * file_data = malloc(sizeof(char) * BUFF_INC);
+            int read_bytes;
+            int total_read_chars = 0;
+            int buff_len = BUFF_INC;
+
+            while ((read_bytes = read(in_fd, file_data, BUFF_INC)) > 0) {
+                buff_len += BUFF_INC;
+                file_data = realloc(file_data, buff_len);
+                if (file_data == NULL) {
+                    printf("Failed allocating memory\n");
+                    exit(1);
+                }
+
+                total_read_chars += read_bytes;
+            }
+            
+            if (read_bytes == -1) {
+                printf("ERROR reading\n");
+                free(file_data);
+                exit(0);
+            }
+            
+            free(file_data);
+
+            decrypt(config, file_data, total_read_chars);
             printf("Extract and decrypt\n");
         }
     }

@@ -88,7 +88,7 @@ stegobmp_configuration_ptr parse_options(int argc, char *argv[]) {
             stegobmp_config->out_file = optarg;
             break;
         case 'p':
-            stegobmp_config->out_file = optarg;
+            stegobmp_config->carrier_file = optarg;
             break;
         case 's':
             stegobmp_config->steg_algo = optarg;

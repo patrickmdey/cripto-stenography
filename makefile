@@ -21,6 +21,7 @@ link:$(OBJECTS)
 
 clean:
 	@${rm} ${OBJECTS} 
+	@${rm} *.o 
 	@${rm} ${BINARY}.out
 
 .PHONY: all clean link compile

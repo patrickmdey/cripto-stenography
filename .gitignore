@@ -3,6 +3,7 @@
 a.out
 stegobmp
 .vscode
+*.txt
 # Object files
 *.o
 *.ko
