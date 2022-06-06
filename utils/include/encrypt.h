@@ -9,6 +9,7 @@
 #include <openssl/rsa.h>
 #include <openssl/x509.h>
 #include <openssl/aes.h>
+#include <openssl/des.h>
 
 int encrypt(stegobmp_configuration_ptr config);
 
