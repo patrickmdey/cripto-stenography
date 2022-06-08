@@ -20,6 +20,7 @@ int main(int argc, char * argv[]) {
             steg(config);
         } else {
             // steg and encrypt
+
             if (config->encryption_algo == NULL) 
                 config->encryption_algo = "aes128";
             
@@ -79,6 +80,7 @@ int main(int argc, char * argv[]) {
     }
 
     free(config);
+    printf("Done\n");
 
     return 0;
 }

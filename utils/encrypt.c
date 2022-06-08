@@ -15,9 +15,21 @@
 // TODO VER CAMBIAR
 #define MAX_AES_KEY 32
 
-static unsigned char * padding(unsigned char *in, int *inl, size_t blocksize);
+typedef const EVP_CIPHER* (*encrypt_algo)(void);
+
+static encrypt_algo encrypt_algo_map[4][4] = {
+    {EVP_aes_128_cbc, EVP_aes_128_ecb, EVP_aes_128_ofb, EVP_aes_128_cfb1},
+    {EVP_aes_192_cbc, EVP_aes_192_ecb, EVP_aes_192_ofb, EVP_aes_192_cfb1},
+    {EVP_aes_256_cbc, EVP_aes_256_ecb, EVP_aes_256_ofb, EVP_aes_256_cfb1},
+    {EVP_des_cbc, EVP_des_ecb, EVP_des_ofb, EVP_des_cfb1}
+};
+
+enum algo_t {aes128 = 0, aes192, aes256, des};
+enum mode_t {cbc = 0, ecb, ofb, cfb};
+
+// static unsigned char * padding(unsigned char *in, int *inl, size_t blocksize);
 int saveEncryptedData(unsigned char *out, int len, unsigned char *where);
-void mostrarKey(unsigned char key[]);
+void mostrarKey(unsigned char key[], int len);
 
 int encrypt(stegobmp_configuration_ptr config) {
     int in_fd = open(config->in_file, O_RDONLY);
@@ -70,6 +82,72 @@ int encrypt(stegobmp_configuration_ptr config) {
     concat_size = strlen(concat);
     free(file_data);
 
+    enum algo_t algo;
+    enum mode_t mode;
+
+    int is_iv_null = 0;
+
+    if(strcmp(config->encryption_algo, "des") == 0){
+        algo = des;
+    } 
+    else if(strcmp(config->encryption_algo, "aes128") == 0){
+        algo = aes128;
+    } 
+    else if(strcmp(config->encryption_algo, "aes192") == 0){
+        algo = aes192;
+    } 
+    else if(strcmp(config->encryption_algo, "aes256") == 0){
+        algo = aes256;
+    } 
+    else {
+        printf("ERROR\n");
+        exit(0);
+    }
+
+    if(strcmp(config->encryption_mode, "cbc") == 0){
+        mode = cbc;
+    } 
+    else if(strcmp(config->encryption_mode, "ecb") == 0){
+        is_iv_null = 1;
+        mode = ecb;
+    } 
+    else if(strcmp(config->encryption_mode, "ofb") == 0){
+        mode = ofb;
+    } 
+    else if(strcmp(config->encryption_mode, "cfb") == 0){
+        mode = cfb;
+    } 
+    else {
+        printf("ERROR\n");
+        exit(0);
+    }
+
+    const EVP_CIPHER * cipher = encrypt_algo_map[algo][mode]();
+    EVP_CIPHER_CTX *ctx;
+
+    /*inicializar contexto*/ 
+    ctx = EVP_CIPHER_CTX_new();
+
+    unsigned char key[EVP_MAX_KEY_LENGTH], iv[EVP_MAX_IV_LENGTH];
+    EVP_BytesToKey(cipher, EVP_sha256(), NULL, (unsigned char *) config->password, strlen(config->password), 1, key, iv);
+
+    unsigned char out_a[concat_size + 32]; //TODO chequear max block size
+    int out_length, temp_length;
+
+    EVP_CipherInit_ex(ctx, cipher, NULL, key, is_iv_null ? NULL : iv, 1);
+
+    EVP_CipherUpdate(ctx, out_a, &out_length, (unsigned char *)concat, concat_size);
+    EVP_CipherFinal(ctx, out_a + out_length, &temp_length);
+
+    saveEncryptedData(out_a, out_length + temp_length, (unsigned char *) "base64.txt");
+
+    EVP_CIPHER_CTX_free(ctx);
+
+    free(concat);
+    return 0;
+
+    /*
+
     if(strcmp(config->encryption_algo, "des") == 0){ 
         printf("Using DES ");
 
@@ -119,24 +197,38 @@ int encrypt(stegobmp_configuration_ptr config) {
         free(out);
     }
     else {
-        unsigned char key[MAX_AES_KEY], iv[MAX_AES_KEY];
+        unsigned char key[EVP_MAX_KEY_LENGTH], iv[EVP_MAX_IV_LENGTH];
 
         AES_KEY aes_key;
         int i;
         
+        int aux = concat_size;
         unsigned char * inPad = padding((unsigned char *)concat, &concat_size, AES_BLOCK_SIZE);
         unsigned char * out = calloc(concat_size + AES_BLOCK_SIZE, sizeof(char));
 
         if (strcmp(config->encryption_algo, "aes128") == 0) {
-            // printf("Using aes128 ");
-            i = EVP_BytesToKey(EVP_aes_128_cbc(), EVP_sha256(), NULL, (unsigned char *) config->password, strlen(config->password), 10, key, iv);
+            printf("Using aes128 ");
+            i = EVP_BytesToKey(EVP_aes_128_cbc(), EVP_sha256(), NULL, (unsigned char *) config->password, strlen(config->password), 1, key, iv);
+            mostrarKey(key, EVP_CIPHER_key_length(EVP_aes_128_cbc()));
+            mostrarKey(iv, EVP_CIPHER_key_length(EVP_aes_128_cbc()));
             if (i != 16) {
                 printf("Key size is %d bits - should be 128 bits\n", i);
                 return -1;
             }
-            
-            AES_set_encrypt_key(key, 16 * BITS, &aes_key);
 
+            unsigned char out_a[concat_size + AES_BLOCK_SIZE];
+            int out_length, temp_length;
+
+            EVP_CipherInit_ex(ctx, EVP_aes_128_cbc(),NULL, key, iv, 1);
+            EVP_CipherUpdate(ctx, out_a, &out_length, (unsigned char *)concat, aux);
+            EVP_CipherFinal(ctx, out_a + out_length, &temp_length);
+            saveEncryptedData(out_a, out_length + temp_length, (unsigned char *) "base64.txt");
+            printf("hola\n");
+            EVP_CIPHER_CTX_free(ctx);
+            printf("antes\n");
+            free(out);
+            printf("despues\n");
+            return 1;
         }
         else if (strcmp(config->encryption_algo, "aes192") == 0) {
             printf("Using aes192 ");
@@ -182,14 +274,12 @@ int encrypt(stegobmp_configuration_ptr config) {
         }
         else if (strcmp(config->encryption_mode, "ofb") == 0) {
             printf("with ofb\n");
-            /* set where on the 128 bit encrypted block to begin encryption*/
             int num = 0;
             AES_ofb128_encrypt((unsigned char *) inPad, out, concat_size, &aes_key, (unsigned char *) iv, &num);
         }
         else if (strcmp(config->encryption_mode, "cfb") == 0) {
 
             printf("with cfb\n");
-            /* set where on the 128 bit encrypted block to begin encryption*/
             int num = 0;
             AES_cfb8_encrypt((unsigned char *) inPad, out, concat_size, &aes_key, (unsigned char *) iv,  &num, AES_ENCRYPT);
         }
@@ -200,8 +290,10 @@ int encrypt(stegobmp_configuration_ptr config) {
     }
     free(concat);
     return 0;
+    */
 }
 
+/*
 static unsigned char * padding(unsigned char *in, int *inl, size_t blocksize) {
     int pad;
     int i;
@@ -214,15 +306,15 @@ static unsigned char * padding(unsigned char *in, int *inl, size_t blocksize) {
     *inl += pad;
     return (inPad);
 }
+*/
 
-void mostrarKey(unsigned char key[])
-{
-    int i;
-    for (i = 0; i < 16; i++)
-    {
-        printf("%0x", key[i]);
-    }
-}
+void mostrarKey(unsigned char key[], int len) {     
+    int i;     
+    for (i = 0; i < len; i++){
+        printf("%0x", key[i]);     
+    } 
+    printf("\n");
+} 
 
 int saveEncryptedData(unsigned char *out, int len, unsigned char *where) {
     BIO *b64;
