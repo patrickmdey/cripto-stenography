@@ -59,3 +59,24 @@ char* itoa(int value, char* buffer, int base)
     // reverse the string and return it
     return reverse(buffer, 0, i - 1);
 }
+
+char * read_from_file(int fd, int * read_chars) {
+    char *buff = calloc(BUFF_INC, sizeof(char));
+    int total_read_chars = 0;
+    int read_bytes;
+    int buff_len = BUFF_INC;
+        
+    while ((read_bytes = read(fd, buff+total_read_chars, BUFF_INC)) > 0) {
+        buff_len += BUFF_INC;
+        buff = realloc(buff, buff_len);
+        if (buff == NULL) {
+            printf("Failed allocating memory\n");
+            exit(1);
+        }
+
+        total_read_chars += read_bytes;
+    }
+
+    *read_chars = total_read_chars;
+    return buff;
+}

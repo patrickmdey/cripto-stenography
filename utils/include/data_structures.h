@@ -3,7 +3,8 @@
 
 #include <stdint.h>
 #define VERSION_NUMBER "0.0.0"
-typedef struct stegobmp_configuration_t {
+typedef struct stegobmp_configuration_t
+{
     char *in_file;
     char *out_file;
     char *carrier_file;
@@ -15,8 +16,11 @@ typedef struct stegobmp_configuration_t {
 } stegobmp_configuration;
 
 typedef int fd;
-typedef stegobmp_configuration * stegobmp_configuration_ptr;
+typedef stegobmp_configuration *stegobmp_configuration_ptr;
+
+typedef struct BMPImage * BMPImage_ptr;
 
 extern stegobmp_configuration_ptr stegobmp_config;
+
 
 #endif

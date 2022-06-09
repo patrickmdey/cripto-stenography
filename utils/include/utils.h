@@ -3,6 +3,14 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <data_structures.h>
+#include <sys/types.h>
+#include <sys/uio.h>
+#include <unistd.h>
 
-char* itoa(int value, char* buffer, int base);
+#define BUFF_INC 1024
+
+char *itoa(int value, char *buffer, int base);
+char * read_from_file(int fd, int * read_chars);
+
 #endif
