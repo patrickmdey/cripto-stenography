@@ -28,6 +28,8 @@ enum algo_t {aes128 = 0, aes192, aes256, des};
 enum mode_t {cbc = 0, ecb, ofb, cfb};
 
 // static unsigned char * padding(unsigned char *in, int *inl, size_t blocksize);
+static int set_encrypt_algo(const char *encryption_algo);
+static int set_encrypt_mode(const char *encryption_mode, int *is_iv_null);
 int saveEncryptedData(unsigned char *out, int len, unsigned char *where);
 void mostrarKey(unsigned char key[], int len);
 
@@ -87,40 +89,55 @@ int encrypt(stegobmp_configuration_ptr config) {
 
     int is_iv_null = 0;
 
-    if(strcmp(config->encryption_algo, "des") == 0){
-        algo = des;
-    } 
-    else if(strcmp(config->encryption_algo, "aes128") == 0){
-        algo = aes128;
-    } 
-    else if(strcmp(config->encryption_algo, "aes192") == 0){
-        algo = aes192;
-    } 
-    else if(strcmp(config->encryption_algo, "aes256") == 0){
-        algo = aes256;
-    } 
-    else {
-        printf("ERROR\n");
-        exit(0);
+    algo = set_encrypt_algo(config->encryption_algo);
+    if (algo < 0){
+        printf("ALGO %d\n", algo);
+        printf("Invalid encryption algorithm\n"); 
+        free(concat); 
+        return 0;
     }
 
-    if(strcmp(config->encryption_mode, "cbc") == 0){
-        mode = cbc;
-    } 
-    else if(strcmp(config->encryption_mode, "ecb") == 0){
-        is_iv_null = 1;
-        mode = ecb;
-    } 
-    else if(strcmp(config->encryption_mode, "ofb") == 0){
-        mode = ofb;
-    } 
-    else if(strcmp(config->encryption_mode, "cfb") == 0){
-        mode = cfb;
-    } 
-    else {
-        printf("ERROR\n");
-        exit(0);
+    mode = set_encrypt_mode(config->encryption_mode, &is_iv_null);
+    if (mode < 0){
+        printf("Invalid encryption mode\n"); 
+        free(concat); 
+        return 0;
     }
+
+    // if(strcmp(config->encryption_algo, "des") == 0){
+    //     algo = des;
+    // } 
+    // else if(strcmp(config->encryption_algo, "aes128") == 0){
+    //     algo = aes128;
+    // } 
+    // else if(strcmp(config->encryption_algo, "aes192") == 0){
+    //     algo = aes192;
+    // } 
+    // else if(strcmp(config->encryption_algo, "aes256") == 0){
+    //     algo = aes256;
+    // } 
+    // else {
+    //     printf("ERROR\n");
+    //     exit(0);
+    // }
+
+    // if(strcmp(config->encryption_mode, "cbc") == 0){
+    //     mode = cbc;
+    // } 
+    // else if(strcmp(config->encryption_mode, "ecb") == 0){
+    //     is_iv_null = 1;
+    //     mode = ecb;
+    // } 
+    // else if(strcmp(config->encryption_mode, "ofb") == 0){
+    //     mode = ofb;
+    // } 
+    // else if(strcmp(config->encryption_mode, "cfb") == 0){
+    //     mode = cfb;
+    // } 
+    // else {
+    //     printf("ERROR\n");
+    //     exit(0);
+    // }
 
     const EVP_CIPHER * cipher = encrypt_algo_map[algo][mode]();
     EVP_CIPHER_CTX *ctx;
@@ -145,152 +162,6 @@ int encrypt(stegobmp_configuration_ptr config) {
 
     free(concat);
     return 0;
-
-    /*
-
-    if(strcmp(config->encryption_algo, "des") == 0){ 
-        printf("Using DES ");
-
-        DES_cblock des_cblock;
-        DES_key_schedule des_key_schedule;
-
-        int ret;
-        do {
-            DES_random_key(&des_cblock);
-            DES_set_odd_parity(&des_cblock);
-            ret = DES_set_key_checked(&des_cblock, &des_key_schedule);
-        } while(ret < 0);
-
-        unsigned char * out = calloc(concat_size + DES_BLOCK_SIZE, sizeof(char));
-        if (strcmp(config->encryption_mode, "cbc") == 0) {
-            printf("with cbc\n");
-            unsigned char * inPad = padding((unsigned char *)concat, &concat_size, DES_BLOCK_SIZE);
-            DES_ncbc_encrypt((unsigned char *) inPad, out, concat_size, &des_key_schedule, &des_cblock, DES_ENCRYPT);
-            free(inPad);
-        }
-        else if (strcmp(config->encryption_mode, "ecb") == 0) {
-            printf("with ecb\n");
-            unsigned char * inPad = padding((unsigned char *)concat, &concat_size, DES_BLOCK_SIZE);
-
-            DES_cblock inB;
-            DES_cblock outB;
-            int numB;
-            int i;
-            numB = concat_size / DES_BLOCK_SIZE;
-            for (i = 0; i < numB; i++) {
-                memcpy(inB, inPad + i * DES_BLOCK_SIZE, DES_BLOCK_SIZE);
-                DES_ecb_encrypt(&inB, &outB, &des_key_schedule, DES_ENCRYPT);
-                memcpy(out + i * DES_BLOCK_SIZE, outB, DES_BLOCK_SIZE);
-            }
-            free(inPad);
-        }
-        else if (strcmp(config->encryption_mode, "ofb") == 0) {
-            printf("with ofb\n");
-            DES_ofb_encrypt((unsigned char *) concat, out, BITS, concat_size, &des_key_schedule, &des_cblock);
-        }
-        else if (strcmp(config->encryption_mode, "cfb") == 0) {
-            printf("with cfb\n");
-            DES_cfb_encrypt((unsigned char *) concat, out, BITS, concat_size, &des_key_schedule, &des_cblock, DES_ENCRYPT);
-        }
-
-        printf("%s\n", out);
-        free(out);
-    }
-    else {
-        unsigned char key[EVP_MAX_KEY_LENGTH], iv[EVP_MAX_IV_LENGTH];
-
-        AES_KEY aes_key;
-        int i;
-        
-        int aux = concat_size;
-        unsigned char * inPad = padding((unsigned char *)concat, &concat_size, AES_BLOCK_SIZE);
-        unsigned char * out = calloc(concat_size + AES_BLOCK_SIZE, sizeof(char));
-
-        if (strcmp(config->encryption_algo, "aes128") == 0) {
-            printf("Using aes128 ");
-            i = EVP_BytesToKey(EVP_aes_128_cbc(), EVP_sha256(), NULL, (unsigned char *) config->password, strlen(config->password), 1, key, iv);
-            mostrarKey(key, EVP_CIPHER_key_length(EVP_aes_128_cbc()));
-            mostrarKey(iv, EVP_CIPHER_key_length(EVP_aes_128_cbc()));
-            if (i != 16) {
-                printf("Key size is %d bits - should be 128 bits\n", i);
-                return -1;
-            }
-
-            unsigned char out_a[concat_size + AES_BLOCK_SIZE];
-            int out_length, temp_length;
-
-            EVP_CipherInit_ex(ctx, EVP_aes_128_cbc(),NULL, key, iv, 1);
-            EVP_CipherUpdate(ctx, out_a, &out_length, (unsigned char *)concat, aux);
-            EVP_CipherFinal(ctx, out_a + out_length, &temp_length);
-            saveEncryptedData(out_a, out_length + temp_length, (unsigned char *) "base64.txt");
-            printf("hola\n");
-            EVP_CIPHER_CTX_free(ctx);
-            printf("antes\n");
-            free(out);
-            printf("despues\n");
-            return 1;
-        }
-        else if (strcmp(config->encryption_algo, "aes192") == 0) {
-            printf("Using aes192 ");
-            
-            i = EVP_BytesToKey(EVP_aes_192_cbc(), EVP_sha256(), NULL, (unsigned char *) config->password, strlen(config->password), 12, key, iv);
-
-            if (i != 24) {
-                printf("Key size is %d bits - should be 192 bits\n", i);
-                return -1;
-            }
-
-            AES_set_encrypt_key(key, 24 * BITS, &aes_key);
-
-        }
-        else if (strcmp(config->encryption_algo, "aes256") == 0) {
-            printf("Using aes256 ");
-
-            i = EVP_BytesToKey(EVP_aes_256_cbc(), EVP_sha256(), NULL, (unsigned char *) config->password, strlen(config->password), 14, key, iv);
-            if (i != 32) {
-                printf("Key size is %d bits - should be 256 bits\n", i);
-                return -1;
-            }
-
-            AES_set_encrypt_key(key, 32 * BITS, &aes_key);
-
-        }
-        else {
-            return -1;
-        }
-
-        if (strcmp(config->encryption_mode, "cbc") == 0) {
-
-            // printf("with cbc\n");
-
-            AES_cbc_encrypt((unsigned char *) inPad, out, concat_size, &aes_key, (unsigned char *)iv, AES_ENCRYPT);
-
-            saveEncryptedData(out, concat_size, (unsigned char *) "base64.txt");
-        }
-        else if (strcmp(config->encryption_mode, "ecb") == 0) {
-
-            printf("with ecb\n");
-            AES_ecb_encrypt((unsigned char *) inPad, out, &aes_key, AES_ENCRYPT);
-        }
-        else if (strcmp(config->encryption_mode, "ofb") == 0) {
-            printf("with ofb\n");
-            int num = 0;
-            AES_ofb128_encrypt((unsigned char *) inPad, out, concat_size, &aes_key, (unsigned char *) iv, &num);
-        }
-        else if (strcmp(config->encryption_mode, "cfb") == 0) {
-
-            printf("with cfb\n");
-            int num = 0;
-            AES_cfb8_encrypt((unsigned char *) inPad, out, concat_size, &aes_key, (unsigned char *) iv,  &num, AES_ENCRYPT);
-        }
-
-        printf("%s", out);
-        free(inPad);
-        free(out);
-    }
-    free(concat);
-    return 0;
-    */
 }
 
 /*
@@ -307,6 +178,43 @@ static unsigned char * padding(unsigned char *in, int *inl, size_t blocksize) {
     return (inPad);
 }
 */
+
+static int set_encrypt_algo(const char *encryption_algo){
+    if(strcmp(encryption_algo, "des") == 0){
+        return des;
+    } 
+    else if(strcmp(encryption_algo, "aes128") == 0){
+        return aes128;
+    } 
+    else if(strcmp(encryption_algo, "aes192") == 0){
+        return aes192;
+    } 
+    else if(strcmp(encryption_algo, "aes256") == 0){
+        return aes256;
+    } 
+    else {
+        return -1;
+    }
+}
+
+static int set_encrypt_mode(const char *encryption_mode, int *is_iv_null){
+    if(strcmp(encryption_mode, "cbc") == 0){
+        return cbc;
+    } 
+    else if(strcmp(encryption_mode, "ecb") == 0){
+        *is_iv_null = 1;
+        return ecb;
+    } 
+    else if(strcmp(encryption_mode, "ofb") == 0){
+        return ofb;
+    } 
+    else if(strcmp(encryption_mode, "cfb") == 0){
+        return cfb;
+    } 
+    else {
+        return -1;
+    }
+}
 
 void mostrarKey(unsigned char key[], int len) {     
     int i;     
