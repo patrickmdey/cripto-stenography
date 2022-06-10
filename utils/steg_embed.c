@@ -42,6 +42,7 @@ typedef struct BMPImage
 
 static uint8_t is_invalid_bmp(BMPImage_ptr bmp_image);
 static int lsb1(BMPImage_ptr bmp_image, char *embed_data, uint32_t embed_data_length, int out_fd);
+static int lsb4(BMPImage_ptr bmp_image, char *embed_data, uint32_t embed_data_length, int out_fd);
 static int write_to_file(int fd, const char *buff, int bytes);
 
 int steg(stegobmp_configuration_ptr config, char *embed_data, uint32_t embed_data_length)
@@ -104,9 +105,9 @@ int steg(stegobmp_configuration_ptr config, char *embed_data, uint32_t embed_dat
         exit(0);
     }
 
-    printf("%d\n", bmp_image->header.width_px);
-    printf("%d\n", bmp_image->header.height_px);
-    printf("%d\n", bmp_image->header.image_size_bytes);
+    // printf("%d\n", bmp_image->header.width_px);
+    // printf("%d\n", bmp_image->header.height_px);
+    // printf("%d\n", bmp_image->header.image_size_bytes);
 
     printf("%s\n", config->out_file);
     int out_fd = open(config->out_file, O_WRONLY | O_CREAT | O_TRUNC, 0644);
@@ -123,6 +124,7 @@ int steg(stegobmp_configuration_ptr config, char *embed_data, uint32_t embed_dat
     }
     else if (strcmp(config->steg_algo, "LSB4") == 0)
     {
+        lsb4(bmp_image, embed_data, embed_data_length, out_fd);
     }
     else if (strcmp(config->steg_algo, "LSBI") == 0)
     {
@@ -167,9 +169,51 @@ static int lsb1(BMPImage_ptr bmp_image, char *embed_data, uint32_t embed_data_le
         {
             uint8_t bit = (embed_data[i] >> (7 - j)) & 1;
             buff[curr_byte] = (bmp_image->data[curr_byte] & 0xE) | (bit);
-            // OxE = 11111110
+            // sifteado = 00000001
             // blue= 10010101
+            // OxE = 11111110
             //     = 10010100
+        }
+    }
+
+    int ret = write_to_file(out_fd, (char *)&bmp_image->header, HEADER_SIZE);
+    if (ret == -1)
+    {
+        printf("Failed writing to file\n");
+        exit(1);
+    }
+    ret = write_to_file(out_fd, buff, bmp_image->header.image_size_bytes);
+    if (ret == -1)
+    {
+        printf("Failed writing to file\n");
+        exit(1);
+    }
+
+    close(out_fd);
+    free(buff);
+    return 0;
+}
+
+
+static int lsb4(BMPImage_ptr bmp_image, char *embed_data, uint32_t embed_data_length, int out_fd)
+{
+    printf("LSB4\n");
+    if (embed_data_length * 2 > bmp_image->header.image_size_bytes)
+    {
+        printf("Aflojale con el espacio rey\n");
+        exit(0);
+    }
+
+    char *buff = calloc(bmp_image->header.image_size_bytes, sizeof(char));
+    memcpy(buff, bmp_image->data, bmp_image->header.image_size_bytes);
+    int curr_byte = 0;
+
+    for (uint32_t i = 0; i < embed_data_length; i++)
+    {
+        for (uint32_t j = 0; j < 2; j++, curr_byte++)
+        {
+            uint8_t bits = (embed_data[i] >> (j * 4)) & 0xF;
+            buff[curr_byte] = (bmp_image->data[curr_byte] & 0xF0) | (bits);
         }
     }
 
