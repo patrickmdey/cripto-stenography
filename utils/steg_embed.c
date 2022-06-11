@@ -7,6 +7,8 @@
 #define BITS_PER_PIXEL 24
 #define BMP_TYPE 0x4d42
 
+#define LSB1_MASK 0x01
+
 #pragma pack(push, 1)
 
 typedef struct BMPHeader
@@ -84,39 +86,11 @@ int steg(stegobmp_configuration_ptr config, char * embed_data, uint32_t embed_da
         exit(0);
     }
 
-    // bmp_image->data = calloc(bmp_image->header.image_size_bytes, sizeof(char));
-    // bmp_image->data = calloc(BUFF_INC, sizeof(char));
-
-    // while ((read_bytes = read(carrier_fd, bmp_image->data + total_read_chars, BUFF_INC)) > 0)
-    // {
-    //     // buff_size += BUFF_INC;
-    //     // bmp_image->data = realloc(bmp_image->data, buff_size);
-    //     if (bmp_image->data == NULL)
-    //     {
-    //         printf("Failed allocating memory\n");
-    //         exit(1);
-    //     }
-
-    //     total_read_chars += read_bytes;
-    // }
-
     bmp_image->data = (unsigned char *) read_from_file(carrier_fd, &total_read_chars);
-
-    // if (read_bytes == -1)
-    // {
-    //     printf("ERROR\n");
-    //     free(buff);
-    //     exit(0);
-    // }
-
-    // printf("%d\n", bmp_image->header.width_px);
-    // printf("%d\n", bmp_image->header.height_px);
-    // printf("%d\n", bmp_image->header.image_size_bytes);
 
     printf("%s\n", config->out_file);
     int out_fd = open(config->out_file, O_WRONLY | O_CREAT | O_TRUNC, 0644);
-    if (out_fd == -1)
-    {
+    if (out_fd == -1) {
         perror("open");
         close(out_fd);
         exit(EXIT_FAILURE);
@@ -148,8 +122,7 @@ int steg(stegobmp_configuration_ptr config, char * embed_data, uint32_t embed_da
     }
     else if (strcmp(config->steg_algo, "LSBI") == 0) {
     }
-    else
-    {
+    else {
         close(out_fd);
         printf("Invalid Steg method\n");
         return -1;
@@ -161,17 +134,34 @@ int steg(stegobmp_configuration_ptr config, char * embed_data, uint32_t embed_da
     return 0;
 }
 
-static uint8_t is_invalid_bmp(BMPImage_ptr bmp_image)
-{
-    return bmp_image->header.type != BMP_TYPE ||
-           bmp_image->header.compression != NO_COMPRESSION ||
-           bmp_image->header.bits_per_pixel != BITS_PER_PIXEL;
+int steg_extract(stegobmp_configuration_ptr config, char * extract_data, uint32_t extract_data_length) {
+    BMPImage_ptr bmp_image = calloc(1, sizeof(BMPImage));
+    memcpy(&bmp_image->header, extract_data, HEADER_SIZE);
+    bmp_image->data = calloc(extract_data_length - sizeof(BMPHeader), sizeof(unsigned char));
+    memcpy(bmp_image->data, extract_data + HEADER_SIZE, extract_data_length - sizeof(BMPHeader));
+
+    if (strcmp(config->steg_algo, "LSB1") == 0) {
+        
+    }
+    else if (strcmp(config->steg_algo, "LSB4") == 0){
+
+    }
+    else if (strcmp(config->steg_algo, "LSBI") == 0){
+
+    }
+
+    free(bmp_image->data);
+    free(bmp_image);
+    return 0;
 }
 
-static int lsb1(BMPImage_ptr bmp_image, char * embed_data, uint32_t embed_data_length, int out_fd)
-{
-    if (embed_data_length * 8 > bmp_image->header.image_size_bytes)
-    {
+static uint8_t is_invalid_bmp(BMPImage_ptr bmp_image) {
+    return bmp_image->header.type != BMP_TYPE || bmp_image->header.compression != NO_COMPRESSION ||
+            bmp_image->header.bits_per_pixel != BITS_PER_PIXEL;
+}
+
+static int lsb1(BMPImage_ptr bmp_image, char * embed_data, uint32_t embed_data_length, int out_fd) {
+    if (embed_data_length * 8 > bmp_image->header.image_size_bytes) {
         printf("Aflojale con el espacio rey\n");
         exit(0);
     }
@@ -194,14 +184,12 @@ static int lsb1(BMPImage_ptr bmp_image, char * embed_data, uint32_t embed_data_l
     }
 
     int ret = write_to_file(out_fd, (char *)&bmp_image->header, HEADER_SIZE);
-    if (ret == -1)
-    {
+    if (ret == -1) {
         printf("Failed writing to file\n");
         exit(1);
     }
     ret = write_to_file(out_fd, buff, bmp_image->header.image_size_bytes);
-    if (ret == -1)
-    {
+    if (ret == -1) {
         printf("Failed writing to file\n");
         exit(1);
     }
@@ -212,11 +200,9 @@ static int lsb1(BMPImage_ptr bmp_image, char * embed_data, uint32_t embed_data_l
 }
 
 
-static int lsb4(BMPImage_ptr bmp_image, char *embed_data, uint32_t embed_data_length, int out_fd)
-{
+static int lsb4(BMPImage_ptr bmp_image, char *embed_data, uint32_t embed_data_length, int out_fd) {
     printf("LSB4\n");
-    if (embed_data_length * 2 > bmp_image->header.image_size_bytes)
-    {
+    if (embed_data_length * 2 > bmp_image->header.image_size_bytes) {
         printf("Aflojale con el espacio rey\n");
         exit(0);
     }
@@ -227,7 +213,7 @@ static int lsb4(BMPImage_ptr bmp_image, char *embed_data, uint32_t embed_data_le
 
     for (uint32_t i = 0; i < embed_data_length; i++) {
         for (uint32_t j = 0; j < 2; j++, curr_byte++) {
-            uint8_t bits = (embed_data[i] >> (j * 4)) & 0xF;
+            uint8_t bits = (embed_data[i] >> (j * 4)) & 0xF; // TODO: No esta al reves?
             buff[curr_byte] = (bmp_image->data[curr_byte] & 0xF0) | (bits);
         }
     }
@@ -248,8 +234,7 @@ static int lsb4(BMPImage_ptr bmp_image, char *embed_data, uint32_t embed_data_le
     return 0;
 }
 
-static int write_to_file(int fd, const char *buff, int bytes)
-{
+static int write_to_file(int fd, const char *buff, int bytes) {
     int bytes_written = 0;
     while (bytes_written < bytes)
     {
