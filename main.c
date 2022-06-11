@@ -15,42 +15,39 @@ int main(int argc, char *argv[])
 
     if (config->is_embed)
     {
+        int in_fd = open(config->in_file, O_RDONLY);
+        if (in_fd == -1) {
+            perror("Error opening input file");
+            exit(EXIT_FAILURE);
+        }
+        uint32_t read_size = 0;
+        char * data = read_from_file(in_fd, &read_size);
+        data[read_size] = 0;
         // embed in file
-        if (config->password == NULL)
-        {
+        if (config->password == NULL) {
             // Solo steg, no encripto
             printf("Steg only\n");
-            // TODO: leer archivo de entrada
 
-            int in_fd = open(config->in_file, O_RDONLY);
-            if (in_fd == -1) {
-                perror("Error opening input file");
-                exit(EXIT_FAILURE);
-            }
-            int read_size = 0;
-            char *data = read_from_file(in_fd, &read_size);
-
-            steg(config, data, read_size);
+            steg(config, data, read_size, NULL);
 
             free(data);
-        }
-        else
-        {
+        } else {
             // steg and encrypt
-
             if (config->encryption_algo == NULL)
                 config->encryption_algo = "aes128";
 
             if (config->encryption_mode == NULL)
                 config->encryption_mode = "cbc";
 
-            encrypt(config);
-            steg(config, "Hola", 4);
-            // printf("Steg and encrypt\n");
+            uint32_t cipher_length = 0;
+
+            char * cipher = encrypt(config, data, read_size, &cipher_length, ENCRYPTION);
+            steg(config, cipher, cipher_length, ".txt"); // TODO: parsear extension
+
+            free(cipher);
+            printf("Steg and encrypt\n"); //TODO logs despues
         }
-    }
-    else
-    {
+    } else {
         // extract from file
         printf("Extract\n");
         if (config->password == NULL)

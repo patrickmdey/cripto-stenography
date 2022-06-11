@@ -7,6 +7,8 @@
 #include <sys/uio.h>
 #include <unistd.h>
 #include <openssl/bio.h>
+#include <endian.h>
+
 
 #define BUFF_INC 1024
 #define MAX_BLOCK_SIZE 32
@@ -31,39 +33,7 @@ static int set_encrypt_algo(const char *encryption_algo);
 static int set_encrypt_mode(const char *encryption_mode, int *is_iv_null);
 int saveEncryptedData(unsigned char *out, int len, unsigned char *where);
 
-int encrypt(stegobmp_configuration_ptr config) {
-    int in_fd = open(config->in_file, O_RDONLY);
-    // READ from file descriptor until EOF
-    // char * file_data = malloc(sizeof(char) * BUFF_INC);
-    // int read_bytes;
-    // int total_read_chars = 0;
-    // int buff_len = BUFF_INC;
-
-    // while ((read_bytes = read(in_fd, file_data+total_read_chars, BUFF_INC)) > 0) {
-    //     buff_len += BUFF_INC;
-    //     file_data = realloc(file_data, buff_len);
-    //     if (file_data == NULL) {
-    //         printf("Failed allocating memory\n");
-    //         exit(1);
-    //     }
-
-    //     total_read_chars += read_bytes;
-    // }
-
-    int total_read_chars = 0;
-
-    char *file_data = read_from_file(in_fd, &total_read_chars);
-    // if (read_bytes == -1) {
-    //     printf("ERROR\n");
-    //     free(file_data);
-    //     exit(0);
-    // }
-    
-    file_data[total_read_chars] = '\0';
-
-    char file_size[10];
-    itoa(total_read_chars, file_size, 10);
-
+char * encrypt(stegobmp_configuration_ptr config, char * data, uint32_t data_length, uint32_t * cipher_length, uint8_t is_encryption) {
     char * extension;
     char * token;
 
@@ -74,17 +44,24 @@ int encrypt(stegobmp_configuration_ptr config) {
         token = strtok(NULL, ".");
     }
     
-    int concat_size = 10 + total_read_chars + strlen(extension) + 1 + 1; // TODO cambiar el 1
-    char *concat = calloc(concat_size, sizeof(char));
+    int concat_size = sizeof(uint32_t) + data_length + 1 + strlen(extension) + 1; // el + 1 es del .
+    char concat[concat_size];
 
-    strcat(concat, file_size);
-    strcat(concat, file_data);
-    strcat(concat, ".");
-    strcat(concat, extension);
+    memset(concat, 0, concat_size);
 
-    concat_size = strlen(concat);
 
-    free(file_data);
+    if(is_encryption) {
+        uint32_t big_endian_size = htobe32(data_length);
+        memcpy(concat, &big_endian_size, sizeof(uint32_t));
+        strcat(concat + sizeof(uint32_t), data);
+        strcat(concat + sizeof(uint32_t) + data_length, ".");
+        strcat(concat + sizeof(uint32_t) + data_length + 1, extension);
+    } else  {
+        memcpy(concat, data, data_length);
+        concat_size = data_length;
+    }
+
+    free(data);
 
     enum algo_t algo;
     enum mode_t mode;
@@ -92,17 +69,15 @@ int encrypt(stegobmp_configuration_ptr config) {
     int is_iv_null = 0;
 
     algo = set_encrypt_algo(config->encryption_algo);
-    if (algo < 0){
+    if (algo < 0) {
         printf("ALGO %d\n", algo);
         printf("Invalid encryption algorithm\n"); 
-        free(concat); 
         return 0;
     }
 
     mode = set_encrypt_mode(config->encryption_mode, &is_iv_null);
-    if (mode < 0){
+    if (mode < 0) {
         printf("Invalid encryption mode\n"); 
-        free(concat); 
         return 0;
     }
 
@@ -114,23 +89,23 @@ int encrypt(stegobmp_configuration_ptr config) {
     unsigned char key[EVP_MAX_KEY_LENGTH], iv[EVP_MAX_IV_LENGTH];
     EVP_BytesToKey(cipher, EVP_sha256(), NULL, (unsigned char *) config->password, strlen(config->password), 1, key, iv);
 
-    unsigned char out[concat_size + MAX_BLOCK_SIZE];
-    int out_length, temp_length;
+    unsigned char * cipher_result = calloc(concat_size + MAX_BLOCK_SIZE, sizeof(char));
+    int cipher_result_length, last_block_length;
 
-    EVP_CipherInit_ex(ctx, cipher, NULL, key, is_iv_null ? NULL : iv, 1);
+    EVP_CipherInit_ex(ctx, cipher, NULL, key, is_iv_null ? NULL : iv, is_encryption);
 
-    EVP_CipherUpdate(ctx, out, &out_length, (unsigned char *)concat, concat_size);
-    EVP_CipherFinal(ctx, out + out_length, &temp_length);
+    EVP_CipherUpdate(ctx, cipher_result, &cipher_result_length, (unsigned char *)concat, concat_size);
+    EVP_CipherFinal(ctx, cipher_result + cipher_result_length, &last_block_length);
 
-    saveEncryptedData(out, out_length + temp_length, (unsigned char *) "base64.txt");
+    saveEncryptedData(cipher_result, cipher_result_length + last_block_length, (unsigned char *) "base64.txt");
 
     EVP_CIPHER_CTX_free(ctx);
 
-    free(concat);
-    return 0;
+    *cipher_length = cipher_result_length + last_block_length;
+    return (char *) cipher_result;
 }
 
-static int set_encrypt_algo(const char *encryption_algo){
+static int set_encrypt_algo(const char *encryption_algo) {
     if(strcmp(encryption_algo, "des") == 0) {
         return des;
     } 

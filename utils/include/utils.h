@@ -10,7 +10,7 @@
 
 #define BUFF_INC 1024
 
-char *itoa(int value, char *buffer, int base);
-char * read_from_file(int fd, int * read_chars);
+char * itoa(int value, char *buffer, int base);
+char * read_from_file(int fd, uint32_t * read_chars);
 
 #endif

@@ -60,7 +60,7 @@ char* itoa(int value, char* buffer, int base)
     return reverse(buffer, 0, i - 1);
 }
 
-char * read_from_file(int fd, int * read_chars) {
+char * read_from_file(int fd, uint32_t * read_chars) {
     char *buff = calloc(BUFF_INC, sizeof(char));
     int total_read_chars = 0;
     int read_bytes;

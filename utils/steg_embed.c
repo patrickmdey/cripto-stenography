@@ -5,6 +5,7 @@
 #define HEADER_SIZE 54
 #define LEAST_SIGINIFICANT 00000001
 #define BITS_PER_PIXEL 24
+#define BMP_TYPE 0x4d42
 
 #pragma pack(push, 1)
 
@@ -41,16 +42,19 @@ typedef struct BMPImage
 #pragma pack(pop)
 
 static uint8_t is_invalid_bmp(BMPImage_ptr bmp_image);
-static int lsb1(BMPImage_ptr bmp_image, char *embed_data, uint32_t embed_data_length, int out_fd);
-static int lsb4(BMPImage_ptr bmp_image, char *embed_data, uint32_t embed_data_length, int out_fd);
-static int write_to_file(int fd, const char *buff, int bytes);
+static int lsb1(BMPImage_ptr bmp_image, char * embed_data, uint32_t embed_data_length, int out_fd);
+static int lsb4(BMPImage_ptr bmp_image, char * embed_data, uint32_t embed_data_length, int out_fd);
+static int write_to_file(int fd, const char * buff, int bytes);
 
-int steg(stegobmp_configuration_ptr config, char *embed_data, uint32_t embed_data_length)
-{
+int steg(stegobmp_configuration_ptr config, char * embed_data, uint32_t embed_data_length, char * extension) {
     int carrier_fd = open(config->carrier_file, O_RDONLY);
+    if (carrier_fd == -1) {
+        perror("Error opening carrier file");
+        exit(EXIT_FAILURE);
+    }
 
     char *buff = calloc(BUFF_INC, sizeof(char));
-    int total_read_chars = 0;
+    uint32_t total_read_chars = 0;
     int read_bytes;
     int bytes_to_read = HEADER_SIZE;
 
@@ -96,14 +100,14 @@ int steg(stegobmp_configuration_ptr config, char *embed_data, uint32_t embed_dat
     //     total_read_chars += read_bytes;
     // }
 
-    bmp_image->data = (unsigned char *)read_from_file(carrier_fd, &total_read_chars);
+    bmp_image->data = (unsigned char *) read_from_file(carrier_fd, &total_read_chars);
 
-    if (read_bytes == -1)
-    {
-        printf("ERROR\n");
-        free(buff);
-        exit(0);
-    }
+    // if (read_bytes == -1)
+    // {
+    //     printf("ERROR\n");
+    //     free(buff);
+    //     exit(0);
+    // }
 
     // printf("%d\n", bmp_image->header.width_px);
     // printf("%d\n", bmp_image->header.height_px);
@@ -118,16 +122,31 @@ int steg(stegobmp_configuration_ptr config, char *embed_data, uint32_t embed_dat
         exit(EXIT_FAILURE);
     }
 
-    if (strcmp(config->steg_algo, "LSB1") == 0)
-    {
-        lsb1(bmp_image, embed_data, embed_data_length, out_fd);
+
+    uint32_t hidden_size = embed_data_length + sizeof(uint32_t) + 1;
+    if (extension != NULL)
+        hidden_size += strlen(extension) + 1;
+
+    char hidden_data[hidden_size];
+    memset(hidden_data, 0, hidden_size);
+
+    uint32_t big_endian_size = htobe32(embed_data_length);
+
+    memcpy(hidden_data, &big_endian_size, sizeof(uint32_t));
+    strcat(hidden_data + sizeof(uint32_t), embed_data);
+
+    if (extension != NULL) {
+        strcat(hidden_data + sizeof(uint32_t) + embed_data_length, ".");
+        strcat(hidden_data + sizeof(uint32_t) + embed_data_length + 1, extension);
     }
-    else if (strcmp(config->steg_algo, "LSB4") == 0)
-    {
-        lsb4(bmp_image, embed_data, embed_data_length, out_fd);
+
+    if (strcmp(config->steg_algo, "LSB1") == 0) {
+        lsb1(bmp_image, hidden_data, hidden_size, out_fd);
     }
-    else if (strcmp(config->steg_algo, "LSBI") == 0)
-    {
+    else if (strcmp(config->steg_algo, "LSB4") == 0) {
+        lsb4(bmp_image, hidden_data, hidden_size, out_fd);
+    }
+    else if (strcmp(config->steg_algo, "LSBI") == 0) {
     }
     else
     {
@@ -144,12 +163,12 @@ int steg(stegobmp_configuration_ptr config, char *embed_data, uint32_t embed_dat
 
 static uint8_t is_invalid_bmp(BMPImage_ptr bmp_image)
 {
-    return bmp_image->header.type != 0x4d42 ||
+    return bmp_image->header.type != BMP_TYPE ||
            bmp_image->header.compression != NO_COMPRESSION ||
            bmp_image->header.bits_per_pixel != BITS_PER_PIXEL;
 }
 
-static int lsb1(BMPImage_ptr bmp_image, char *embed_data, uint32_t embed_data_length, int out_fd)
+static int lsb1(BMPImage_ptr bmp_image, char * embed_data, uint32_t embed_data_length, int out_fd)
 {
     if (embed_data_length * 8 > bmp_image->header.image_size_bytes)
     {
@@ -163,12 +182,10 @@ static int lsb1(BMPImage_ptr bmp_image, char *embed_data, uint32_t embed_data_le
     memcpy(buff, bmp_image->data, bmp_image->header.image_size_bytes);
     int curr_byte = 0;
 
-    for (uint32_t i = 0; i < embed_data_length; i++)
-    {
-        for (uint32_t j = 0; j < 8; j++, curr_byte++)
-        {
+    for (uint32_t i = 0; i < embed_data_length; i++) {
+        for (uint32_t j = 0; j < 8; j++, curr_byte++) {
             uint8_t bit = (embed_data[i] >> (7 - j)) & 1;
-            buff[curr_byte] = (bmp_image->data[curr_byte] & 0xE) | (bit);
+            buff[curr_byte] = (bmp_image->data[curr_byte] & 0xFE) | (bit);
             // sifteado = 00000001
             // blue= 10010101
             // OxE = 11111110
@@ -208,24 +225,20 @@ static int lsb4(BMPImage_ptr bmp_image, char *embed_data, uint32_t embed_data_le
     memcpy(buff, bmp_image->data, bmp_image->header.image_size_bytes);
     int curr_byte = 0;
 
-    for (uint32_t i = 0; i < embed_data_length; i++)
-    {
-        for (uint32_t j = 0; j < 2; j++, curr_byte++)
-        {
+    for (uint32_t i = 0; i < embed_data_length; i++) {
+        for (uint32_t j = 0; j < 2; j++, curr_byte++) {
             uint8_t bits = (embed_data[i] >> (j * 4)) & 0xF;
             buff[curr_byte] = (bmp_image->data[curr_byte] & 0xF0) | (bits);
         }
     }
 
     int ret = write_to_file(out_fd, (char *)&bmp_image->header, HEADER_SIZE);
-    if (ret == -1)
-    {
+    if (ret == -1) {
         printf("Failed writing to file\n");
         exit(1);
     }
     ret = write_to_file(out_fd, buff, bmp_image->header.image_size_bytes);
-    if (ret == -1)
-    {
+    if (ret == -1) {
         printf("Failed writing to file\n");
         exit(1);
     }

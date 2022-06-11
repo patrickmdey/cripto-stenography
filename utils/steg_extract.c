@@ -1,7 +1,6 @@
 #include <steg.h>
 
-int steg_extract(stegobmp_configuration_ptr config)
-{
+int steg_extract(stegobmp_configuration_ptr config, char * extract_data, uint32_t extract_data_length) {
     // if (config->steg_algo = "LSB1"){
 
     // }
@@ -13,3 +12,5 @@ int steg_extract(stegobmp_configuration_ptr config)
     // }
     return 0;
 }
+
+
