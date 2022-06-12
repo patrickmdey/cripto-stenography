@@ -25,6 +25,6 @@
 #define HEADER_SIZE 54
 
 int steg(stegobmp_configuration_ptr config, char *embed_data , uint32_t embed_data_length, char * extension);
-int steg_extract(stegobmp_configuration_ptr config, char * extract_data, uint32_t extract_data_length);
+char * steg_extract(stegobmp_configuration_ptr config, char * extract_data, uint32_t extract_data_length, uint32_t * hidden_size);
 
 #endif
