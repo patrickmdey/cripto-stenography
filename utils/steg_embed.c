@@ -1,44 +1,43 @@
 #include <steg.h>
 
-#define BUFF_INC 1024
-#define NO_COMPRESSION 0
-#define HEADER_SIZE 54
-#define LEAST_SIGINIFICANT 00000001
-#define BITS_PER_PIXEL 24
-#define BMP_TYPE 0x4d42
+#define BUFF_INC            1024
+#define NO_COMPRESSION      0
+#define HEADER_SIZE         54
+#define LEAST_SIGINIFICANT  00000001
+#define BITS_PER_PIXEL      24
+#define BMP_TYPE            0x4d42
 
-#define LSB1_MASK 0x01
+#define LSB1_MASK 0xFE
+#define LSB4_MASK 0xF0
 
 #pragma pack(push, 1)
 
-typedef struct BMPHeader
-{                              // Total: 54 bytes
-    uint16_t type;             // Magic identifier: 0x4d42
-    uint32_t size;             // File size in bytes
-    uint16_t reserved1;        // Not used
-    uint16_t reserved2;        // Not used
-    uint32_t offset;           // Offset to image data in bytes from beginning of file (54 bytes)
-    uint32_t dib_header_size;  // DIB Header size in bytes (40 bytes)
-    int32_t width_px;          // Width of the image
-    int32_t height_px;         // Height of image
-    uint16_t num_planes;       // Number of color planes
-    uint16_t bits_per_pixel;   // Bits per pixel
-    uint32_t compression;      // Compression type
-    uint32_t image_size_bytes; // Image size in bytes
-    int32_t x_resolution_ppm;  // Pixels per meter
-    int32_t y_resolution_ppm;  // Pixels per meter
-    uint32_t num_colors;       // Number of colors
-    uint32_t important_colors; // Important colors
+typedef struct BMPHeader {          // Total: 54 bytes
+    uint16_t    type;               // Magic identifier: 0x4d42
+    uint32_t    size;               // File size in bytes
+    uint16_t    reserved1;          // Not used
+    uint16_t    reserved2;          // Not used
+    uint32_t    offset;             // Offset to image data in bytes from beginning of file (54 bytes)
+    uint32_t    dib_header_size;    // DIB Header size in bytes (40 bytes)
+    int32_t     width_px;           // Width of the image
+    int32_t     height_px;          // Height of image
+    uint16_t    num_planes;         // Number of color planes
+    uint16_t    bits_per_pixel;     // Bits per pixel
+    uint32_t    compression;        // Compression type
+    uint32_t    image_size_bytes;   // Image size in bytes
+    int32_t     x_resolution_ppm;   // Pixels per meter
+    int32_t     y_resolution_ppm;   // Pixels per meter
+    uint32_t    num_colors;         // Number of colors
+    uint32_t    important_colors;   // Important colors
 } BMPHeader;
 
 #pragma pack(pop)
 
 #pragma pack(push, 1)
 
-typedef struct BMPImage
-{
-    BMPHeader header;
-    unsigned char *data;
+typedef struct BMPImage {
+    BMPHeader       header;
+    unsigned char * data;
 } BMPImage;
 
 #pragma pack(pop)
@@ -47,6 +46,8 @@ static uint8_t is_invalid_bmp(BMPImage_ptr bmp_image);
 static int lsb1(BMPImage_ptr bmp_image, char * embed_data, uint32_t embed_data_length, int out_fd);
 static int lsb4(BMPImage_ptr bmp_image, char * embed_data, uint32_t embed_data_length, int out_fd);
 static int write_to_file(int fd, const char * buff, int bytes);
+static void lsb1_extract(BMPImage_ptr bmp_image);
+static void lsb4_extract(BMPImage_ptr bmp_image);
 
 int steg(stegobmp_configuration_ptr config, char * embed_data, uint32_t embed_data_length, char * extension) {
     int carrier_fd = open(config->carrier_file, O_RDONLY);
@@ -160,26 +161,83 @@ static uint8_t is_invalid_bmp(BMPImage_ptr bmp_image) {
             bmp_image->header.bits_per_pixel != BITS_PER_PIXEL;
 }
 
+static void lsb1_extract(BMPImage_ptr bmp_image) {
+    uint8_t byte = 0;
+    uint32_t hidden_size = 0;
+
+    uint8_t size_bytes[4];
+
+    for(int i = 0; i < sizeof(uint32_t) * 8; i++) {
+        uint8_t bit = bmp_image->data[i] & 1;
+        byte = (byte << 1) | bit;
+        if(i + 1 % 8 == 0) {
+            printf("%c", byte);
+            byte = 0;
+            size_bytes[((i + 1) / 8) - 1] = byte;
+        }
+    }
+
+    memcpy(&hidden_size, size_bytes, sizeof(uint32_t));
+    hidden_size = be32toh(hidden_size);
+
+    uint8_t hidden_data[hidden_size];
+
+    for(int i = 0; i < hidden_size * 8; i++) {
+        uint8_t bit = bmp_image->data[i + sizeof(uint32_t) * 8] & 1;
+        byte = (byte << 1) | bit;
+        if(i + 1 % 8 == 0) {
+            printf("%c", byte);
+            byte = 0;
+        }
+    }
+}
+
+
+static void lsb4_extract(BMPImage_ptr bmp_image) {
+    uint8_t byte = 0;
+    uint32_t hidden_size = 0;
+
+    uint8_t size_bytes[4];
+
+    for(int i = 0; i < sizeof(uint32_t) * 2; i++) {
+        uint8_t bits = bmp_image->data[i] & 0x0F;
+        byte = (byte << 4) | bits;
+        if(i + 1 % 2 == 0) {
+            printf("%c", byte);
+            byte = 0;
+            size_bytes[((i + 1) / 2) - 1] = byte;
+        }
+    }
+
+    memcpy(&hidden_size, size_bytes, sizeof(uint32_t));
+    hidden_size = be32toh(hidden_size);
+
+    uint8_t hidden_data[hidden_size];
+
+    for(int i = 0; i < hidden_size * 2; i++) {
+        uint8_t bits = bmp_image->data[i + sizeof(uint32_t) * 2] & 0x0F;
+        byte = (byte << 4) | bits;
+        if(i + 1 % 2 == 0) {
+            printf("%c", byte);
+            byte = 0;
+        }
+    }
+}
+
 static int lsb1(BMPImage_ptr bmp_image, char * embed_data, uint32_t embed_data_length, int out_fd) {
     if (embed_data_length * 8 > bmp_image->header.image_size_bytes) {
         printf("Aflojale con el espacio rey\n");
         exit(0);
     }
 
-    // pixels per row * amount of rows // c/pixel = 3bytes
-    // int image_size = bmp_image->header.width_px * bmp_image->header.height_px;
-    char *buff = calloc(bmp_image->header.image_size_bytes, sizeof(char));
+    char * buff = calloc(bmp_image->header.image_size_bytes, sizeof(char));
     memcpy(buff, bmp_image->data, bmp_image->header.image_size_bytes);
     int curr_byte = 0;
 
     for (uint32_t i = 0; i < embed_data_length; i++) {
-        for (uint32_t j = 0; j < 8; j++, curr_byte++) {
-            uint8_t bit = (embed_data[i] >> (7 - j)) & 1;
-            buff[curr_byte] = (bmp_image->data[curr_byte] & 0xFE) | (bit);
-            // sifteado = 00000001
-            // blue= 10010101
-            // OxE = 11111110
-            //     = 10010100
+        for (uint32_t j = 7; j >= 0; j++, curr_byte++) {
+            uint8_t bit = (embed_data[i] >> j) & 1;
+            buff[curr_byte] = (bmp_image->data[curr_byte] & LSB1_MASK) | (bit);
         }
     }
 
@@ -200,7 +258,7 @@ static int lsb1(BMPImage_ptr bmp_image, char * embed_data, uint32_t embed_data_l
 }
 
 
-static int lsb4(BMPImage_ptr bmp_image, char *embed_data, uint32_t embed_data_length, int out_fd) {
+static int lsb4(BMPImage_ptr bmp_image, char * embed_data, uint32_t embed_data_length, int out_fd) {
     printf("LSB4\n");
     if (embed_data_length * 2 > bmp_image->header.image_size_bytes) {
         printf("Aflojale con el espacio rey\n");
@@ -212,9 +270,9 @@ static int lsb4(BMPImage_ptr bmp_image, char *embed_data, uint32_t embed_data_le
     int curr_byte = 0;
 
     for (uint32_t i = 0; i < embed_data_length; i++) {
-        for (uint32_t j = 0; j < 2; j++, curr_byte++) {
-            uint8_t bits = (embed_data[i] >> (j * 4)) & 0xF; // TODO: No esta al reves?
-            buff[curr_byte] = (bmp_image->data[curr_byte] & 0xF0) | (bits);
+        for (uint32_t j = 1; j >= 0; j++, curr_byte++) {
+            uint8_t bits = (embed_data[i] >> (j * 4)) & 0x0F;
+            buff[curr_byte] = (bmp_image->data[curr_byte] & LSB4_MASK) | (bits);
         }
     }
 
@@ -236,11 +294,9 @@ static int lsb4(BMPImage_ptr bmp_image, char *embed_data, uint32_t embed_data_le
 
 static int write_to_file(int fd, const char *buff, int bytes) {
     int bytes_written = 0;
-    while (bytes_written < bytes)
-    {
+    while (bytes_written < bytes) {
         int bytes_to_write = write(fd, buff + bytes_written, bytes - bytes_written);
-        if (bytes_to_write == -1)
-        {
+        if (bytes_to_write == -1) {
             perror("write");
             return -1;
         }

@@ -96,7 +96,9 @@ int main(int argc, char *argv[])
 
             free(file_data);
 
-            decrypt(config, file_data, total_read_chars);
+            uint32_t cipher_length = 0;
+            char * cipher = encrypt(config, file_data, total_read_chars, &cipher_length, DECRYPTION);
+
             printf("Extract and decrypt\n");
         }
     }

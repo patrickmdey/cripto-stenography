@@ -12,14 +12,12 @@
 
 #define BUFF_INC 1024
 #define MAX_BLOCK_SIZE 32
-#define BITS 8
+#define ALGO_MAP_SIZE 4
 
-// TODO VER CAMBIAR
-#define MAX_AES_KEY 32
 
-typedef const EVP_CIPHER* (*encrypt_algo)(void);
+typedef const EVP_CIPHER * (*encrypt_algo)(void);
 
-static encrypt_algo encrypt_algo_map[4][4] = {
+static encrypt_algo encrypt_algo_map[ALGO_MAP_SIZE][ALGO_MAP_SIZE] = {
     {EVP_aes_128_cbc, EVP_aes_128_ecb, EVP_aes_128_ofb, EVP_aes_128_cfb8},
     {EVP_aes_192_cbc, EVP_aes_192_ecb, EVP_aes_192_ofb, EVP_aes_192_cfb8},
     {EVP_aes_256_cbc, EVP_aes_256_ecb, EVP_aes_256_ofb, EVP_aes_256_cfb8},
@@ -29,9 +27,9 @@ static encrypt_algo encrypt_algo_map[4][4] = {
 enum algo_t {aes128 = 0, aes192, aes256, des};
 enum mode_t {cbc = 0, ecb, ofb, cfb};
 
-static int set_encrypt_algo(const char *encryption_algo);
-static int set_encrypt_mode(const char *encryption_mode, int *is_iv_null);
-int saveEncryptedData(unsigned char *out, int len, unsigned char *where);
+static int set_encrypt_algo(const char * encryption_algo);
+static int set_encrypt_mode(const char * encryption_mode, int * is_iv_null);
+int saveEncryptedData(unsigned char * out, int len, unsigned char * where);
 
 char * encrypt(stegobmp_configuration_ptr config, char * data, uint32_t data_length, uint32_t * cipher_length, uint8_t is_encryption) {
     char * extension;
@@ -82,7 +80,7 @@ char * encrypt(stegobmp_configuration_ptr config, char * data, uint32_t data_len
     }
 
     const EVP_CIPHER * cipher = encrypt_algo_map[algo][mode]();
-    EVP_CIPHER_CTX *ctx;
+    EVP_CIPHER_CTX * ctx;
 
     ctx = EVP_CIPHER_CTX_new();
 
@@ -123,7 +121,7 @@ static int set_encrypt_algo(const char *encryption_algo) {
     }
 }
 
-static int set_encrypt_mode(const char *encryption_mode, int *is_iv_null){
+static int set_encrypt_mode(const char *encryption_mode, int * is_iv_null){
     if(strcmp(encryption_mode, "cbc") == 0) {
         return cbc;
     } 
@@ -142,7 +140,7 @@ static int set_encrypt_mode(const char *encryption_mode, int *is_iv_null){
     }
 }
 
-int saveEncryptedData(unsigned char *out, int len, unsigned char *where) {
+int saveEncryptedData(unsigned char * out, int len, unsigned char * where) {
     BIO *b64;
     BIO *bio;
     b64 = BIO_new(BIO_f_base64());
