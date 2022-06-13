@@ -1,11 +1,10 @@
 #include <parse_options.h>
 #include <fcntl.h>
 #include <utils.h>
-#include <decrypt.h>
 #include <encrypt.h>
-#include <extract.h>
 #include <steg.h>
 #include <utils.h>
+#include <logger.h>
 
 #define BUFF_INC 1024
 
@@ -14,27 +13,22 @@ int main(int argc, char * argv[]) {
     stegobmp_configuration_ptr config = parse_options(argc, argv);
 
     if (config->is_embed) {
+        log(INFO, "Preparing to embed...%s", "");
         int in_fd = open(config->in_file, O_RDONLY);
-        if (in_fd == -1) {
-            perror("Error opening input file");
-            exit(EXIT_FAILURE);
-        }
+        if (in_fd == -1)
+            log(FATAL, "Could not open input file %s", config->in_file);
+
         uint32_t read_size = 0;
         char * data = read_from_file(in_fd, &read_size);
-        // data[read_size] = 0;
-        // printf("%s\n", data);
-        // embed in file
-        if (config->password == NULL) {
-            // Solo steg, no encripto
-            printf("Steg only\n");
 
-            char * extension = get_extension(config->in_file);
-            printf("Extension: %s\n", extension);
-            steg(config, data, read_size, extension);// TODO: parsear extension
-            free(extension);
+        char * extension = NULL;
+
+        if (config->password == NULL) {
+            extension = get_extension(config->in_file);
         }
         else {
-            // steg and encrypt
+            log(INFO, "Encrypting file %s", config->in_file);
+
             if (config->encryption_algo == NULL)
                 config->encryption_algo = "aes128";
 
@@ -42,82 +36,67 @@ int main(int argc, char * argv[]) {
                 config->encryption_mode = "cbc";
 
             uint32_t cipher_length = 0;
+            char * aux;
+            aux = encrypt(config, data, read_size, &cipher_length, ENCRYPTION);
 
-            char * cipher = encrypt(config, data, read_size, &cipher_length, ENCRYPTION);
-            cipher[cipher_length] = 0;
-            printf("Cipher length: %d\n", cipher_length);
-            printf("Cipher: %s\n", cipher);
-
-            steg(config, cipher, cipher_length, NULL);
-            free(cipher);
-
-            printf("Steg and encrypt\n"); //TODO logs despues
+            memcpy(data, aux, cipher_length);
+            free(aux);
+            read_size = cipher_length;
         }
+        steg(config, data, read_size, extension);
 
         free(data);
-
+        if (extension != NULL)
+            free(extension);
+        log(INFO, "Embedding finished%s", "");
     }
     else {
         // extract from file
-        printf("Extract\n");
+        log(INFO, "Preparing to extract...%s", "");
+
         int in_fd = open(config->carrier_file, O_RDONLY);
         if (in_fd == -1) {
-            perror("Error opening input file");
-            exit(EXIT_FAILURE);
+            log(FATAL, "Could not open carrier file %s", config->carrier_file);
         }
 
         uint32_t read_size = 0;
         char * data = read_from_file(in_fd, &read_size);
-        data[read_size] = 0;
 
-        uint32_t output_data_length = 0;
-        char * output_data = NULL;
+        uint32_t hidden_data_length = 0;
+        char * hidden_data = NULL;
 
-        if (config->password == NULL) {
-            // Solo steg, no encripto
-            printf("Extract only\n");
-            // uint32_t hidden_size = 0;
-            output_data = steg_extract(config, data, read_size, &output_data_length);
+        hidden_data = steg_extract(config, data, read_size, &hidden_data_length);
 
-            //free(hidden_data);
-        } else {
-            // steg and decrypt
+        if (config->password != NULL) {
+            log(INFO, "Decrypting hidden data%s", "");
             if (config->encryption_algo == NULL)
                 config->encryption_algo = "aes128";
 
             if (config->encryption_mode == NULL)
                 config->encryption_mode = "cbc";
 
-            // extract(config);
-            uint32_t hidden_size = 0;//, cipher_length = 0;
-            char * hidden_data = steg_extract(config, data, read_size, &hidden_size);
+            uint32_t plain_size = 0;
+            char * plain_data = encrypt(config, hidden_data, hidden_data_length, &plain_size, DECRYPTION);
             
-            output_data = encrypt(config, hidden_data, hidden_size, &output_data_length, DECRYPTION);
-            // printf("Salida size: %d\n", cipher_length);
-            // // cipher[cipher_length] = 0;
-            // printf("SALIDA: %s\n", cipher + 4);
-            // free(cipher);
-            // printf("Extract and decrypt\n");
-            free(hidden_data);
+            memcpy(hidden_data, plain_data, plain_size);
+            free(plain_data);
+            hidden_data_length = plain_size;
         }
 
         int out_fd = open(config->out_file, O_WRONLY | O_CREAT, 0644);
-        if (out_fd == -1) {
-            perror("Error opening output file");
-            exit(EXIT_FAILURE);
-        }
+        if (out_fd == -1)
+            log(FATAL, "Could not open output file %s", config->out_file);
 
         // TODO: ver que hacemo, el + 4 es para ignorar el tamano, 
         // falta sacarle la extension del final tmb pero necesito tenerla o al menos la longitud
-        write_to_file(out_fd, output_data + 4, output_data_length - 4);
+        write_to_file(out_fd, hidden_data + 4, hidden_data_length - 4);
 
         close(out_fd);
 
-        free(output_data);
+        free(hidden_data);
         free(data);
     }
 
     free(config);
-    printf("Done\n");
     return 0;
 }

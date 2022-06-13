@@ -39,10 +39,9 @@ void print_help() {
 
 stegobmp_configuration_ptr init_stegobmp_config() {
     stegobmp_configuration_ptr stegobmp_config    = malloc(sizeof(stegobmp_configuration));
-    if(stegobmp_config == NULL) {
-        // log(FATAL, "%s", "Error while allocating memory for proxy configuration.\n");
-        exit(STATUS_ERROR);
-    }
+    if(stegobmp_config == NULL)
+        log(FATAL, "%s", "Error while allocating memory for proxy configuration.\n");
+
     stegobmp_config->in_file            = NULL;
     stegobmp_config->out_file           = NULL;
     stegobmp_config->carrier_file       = NULL;

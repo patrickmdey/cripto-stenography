@@ -50,48 +50,39 @@ static char * lsb4_extract(BMPImage_ptr bmp_image, uint32_t * hidden_size);
 
 int steg(stegobmp_configuration_ptr config, char * embed_data, uint32_t embed_data_length, char * extension) {
     int carrier_fd = open(config->carrier_file, O_RDONLY);
-    if (carrier_fd == -1) {
-        perror("Error opening carrier file");
-        exit(EXIT_FAILURE);
-    }
+    if (carrier_fd == -1)
+        log(FATAL, "Could not open carrier file: %s", config->carrier_file);
 
     char * buff = calloc(BUFF_INC, sizeof(char));
+    if (buff == NULL)
+        log(FATAL, "Could not allocate memory for buffer%s", "");
+
     uint32_t total_read_chars = 0;
     int read_bytes;
     int bytes_to_read = HEADER_SIZE;
 
     BMPImage_ptr bmp_image = calloc(1, sizeof(BMPImage));
+    if (bmp_image == NULL)
+        log(FATAL, "Could not allocate memory for BMPImage%s", "");
 
     int offset = 0;
     while (bytes_to_read > 0 && (read_bytes = read(carrier_fd, buff, bytes_to_read)) > 0) {
-        if (read_bytes == -1) {
-            perror("read");
-            exit(EXIT_FAILURE);
-        }
-
         bytes_to_read -= read_bytes;
         memcpy(&bmp_image->header + offset, buff, read_bytes);
         offset += read_bytes;
     }
 
-    if (is_invalid_bmp(bmp_image)) {
-        printf("%d\n", bmp_image->header.compression);
-        printf("%x\n", bmp_image->header.type);
-        printf("%x\n", bmp_image->header.bits_per_pixel);
-        free(buff);
-        printf("Invalid bmp\n");
-        exit(0);
-    }
+    if (read_bytes == -1)
+        log(FATAL, "Could not read from carrier file: %s", config->carrier_file);
+
+    if (is_invalid_bmp(bmp_image))
+        log(FATAL, "Invalid BMP file: %s. Correct format is no compression and 24 bits per pixel", config->carrier_file);
 
     bmp_image->data = (unsigned char *)read_from_file(carrier_fd, &total_read_chars);
 
-    printf("%s\n", config->out_file);
     int out_fd = open(config->out_file, O_WRONLY | O_CREAT | O_TRUNC, 0644);
-    if (out_fd == -1) {
-        perror("open");
-        close(out_fd);
-        exit(EXIT_FAILURE);
-    }
+    if (out_fd == -1)
+        log(FATAL, "Could not open output file: %s", config->out_file);
 
     uint32_t hidden_size = embed_data_length + sizeof(uint32_t);
     if (extension != NULL)
@@ -100,22 +91,17 @@ int steg(stegobmp_configuration_ptr config, char * embed_data, uint32_t embed_da
     char hidden_data[hidden_size];
     memset(hidden_data, 0, hidden_size);
 
-
-    printf("To hide size %d\n", hidden_size);
     uint32_t big_endian_size = htobe32(embed_data_length);
 
     memcpy(hidden_data, &big_endian_size, sizeof(uint32_t));
     memcpy(hidden_data + sizeof(uint32_t), embed_data, embed_data_length);
-    //strcat(hidden_data + sizeof(uint32_t), embed_data);
 
     if (extension != NULL) {
-        //strcat(hidden_data + sizeof(uint32_t) + embed_data_length, "."); // TODO: fix
         memcpy(hidden_data + sizeof(uint32_t) + embed_data_length, extension, strlen(extension) + 1);
-        //strcat(hidden_data + sizeof(uint32_t) + embed_data_length, extension);
     }
 
     if (strcmp(config->steg_algo, "LSB1") == 0) {
-        char * out_data = lsb1(bmp_image, hidden_data, hidden_size, out_fd);
+        char * out_data = lsb1(bmp_image, hidden_data, hidden_size, out_fd); // TODO cambiar
         free(out_data);
     }
     else if (strcmp(config->steg_algo, "LSB4") == 0) {
@@ -124,9 +110,7 @@ int steg(stegobmp_configuration_ptr config, char * embed_data, uint32_t embed_da
     else if (strcmp(config->steg_algo, "LSBI") == 0) {
     }
     else {
-        close(out_fd);
-        printf("Invalid Steg method\n");
-        return -1;
+        log(FATAL, "Invalid steg algorithm: %s", config->steg_algo);
     }
 
     free(buff);
@@ -137,8 +121,14 @@ int steg(stegobmp_configuration_ptr config, char * embed_data, uint32_t embed_da
 
 char * steg_extract(stegobmp_configuration_ptr config, char * extract_data, uint32_t extract_data_length, uint32_t * hidden_size) {
     BMPImage_ptr bmp_image = calloc(1, sizeof(BMPImage));
+    if (bmp_image == NULL)
+        log(FATAL, "Could not allocate memory for BMPImage%s", "");
+
     memcpy(&bmp_image->header, extract_data, HEADER_SIZE);
     bmp_image->data = calloc(extract_data_length - sizeof(BMPHeader), sizeof(unsigned char));
+    if (bmp_image->data == NULL)
+        log(FATAL, "Could not allocate memory for BMPImage data%s", "");
+
     memcpy(bmp_image->data, extract_data + HEADER_SIZE, extract_data_length - sizeof(BMPHeader));
 
     char * hidden_data;
@@ -174,24 +164,18 @@ static char * lsb1_extract(BMPImage_ptr bmp_image, uint32_t * hidden_size) {
         byte = (byte << 1) | bit;
         if ((i + 1) % 8 == 0) {
             size_bytes[((i + 1) / 8) - 1] = byte;
-            printf("%x\n", byte);
             byte = 0;
         }
     }
 
-    byte = 0; // no hace falta pero no esta funcionando xd
-
     memcpy(hidden_size, size_bytes, sizeof(uint32_t));
     *hidden_size = be32toh(*hidden_size);
-
-    printf("Tamaño oculto: %d\n", *hidden_size);
 
     char * hidden_data = calloc(*hidden_size + 1, sizeof(char)); // + 1 para el 0
 
     for (uint32_t i = 0; i < (*hidden_size) * 8; i++) {
         uint8_t bit = bmp_image->data[i + offset] & 1;
         byte = (byte << 1) | bit;
-        // printf("Byte ahora vale %d \t ", byte);
         if ((i + 1) % 8 == 0) {
             hidden_data[((i + 1) / 8) - 1] = byte;
             byte = 0;
@@ -222,21 +206,19 @@ static char * lsb1_extract(BMPImage_ptr bmp_image, uint32_t * hidden_size) {
 
     // if (found)
     //     printf("Extension: %s\n", extension);
-
-    printf("Lo oculto es: %s\n", hidden_data);
     return hidden_data;
 }
-
 
 static char * lsb4_extract(BMPImage_ptr bmp_image, uint32_t * hidden_size) {
     uint8_t byte = 0;
     uint8_t size_bytes[4];
 
-    for (uint32_t i = 0; i < sizeof(uint32_t) * 2; i++) {
+    uint32_t offset = sizeof(uint32_t) * 2;
+
+    for (uint32_t i = 0; i < offset; i++) {
         uint8_t bits = bmp_image->data[i] & 0x0F;
         byte = (byte << 4) | bits;
         if ((i + 1) % 2 == 0) {
-            printf("%c", byte);
             size_bytes[((i + 1) / 2) - 1] = byte;
             byte = 0;
         }
@@ -245,13 +227,12 @@ static char * lsb4_extract(BMPImage_ptr bmp_image, uint32_t * hidden_size) {
     memcpy(hidden_size, size_bytes, sizeof(uint32_t));
     *hidden_size = be32toh(*hidden_size);
 
-    char * hidden_data = calloc(*hidden_size, sizeof(char));
+    char * hidden_data = calloc(*hidden_size + 1, sizeof(char)); // + 1 para el 0
 
     for (uint32_t i = 0; i < *hidden_size * 2; i++) {
-        uint8_t bits = bmp_image->data[i + sizeof(uint32_t) * 2] & 0x0F;
+        uint8_t bits = bmp_image->data[i + offset] & 0x0F;
         byte = (byte << 4) | bits;
         if ((i + 1) % 2 == 0) {
-            printf("%c", byte);
             hidden_data[((i + 1) / 2) - 1] = byte;
             byte = 0;
         }
@@ -261,12 +242,13 @@ static char * lsb4_extract(BMPImage_ptr bmp_image, uint32_t * hidden_size) {
 }
 
 static char * lsb1(BMPImage_ptr bmp_image, char * embed_data, uint32_t embed_data_length, int out_fd) {
-    if (embed_data_length * 8 > bmp_image->header.image_size_bytes) {
-        printf("Aflojale con el espacio rey\n");
-        exit(0);
-    }
+    if (embed_data_length * 8 > bmp_image->header.image_size_bytes)
+        log(FATAL, "Data to embed is too big for the image%s", "");
 
     char * buff = calloc(bmp_image->header.image_size_bytes, sizeof(char));
+    if (buff == NULL)
+        log(FATAL, "Could not allocate memory for BMPImage data%s", "");
+
     memcpy(buff, bmp_image->data, bmp_image->header.image_size_bytes);
     int curr_byte = 0;
 
@@ -277,31 +259,24 @@ static char * lsb1(BMPImage_ptr bmp_image, char * embed_data, uint32_t embed_dat
         }
     }
 
-    int ret = write_to_file(out_fd, (char *)&bmp_image->header, HEADER_SIZE);
-    if (ret == -1) {
-        printf("Failed writing to file\n");
-        exit(1);
-    }
-    ret = write_to_file(out_fd, buff, bmp_image->header.image_size_bytes);
-    if (ret == -1) {
-        printf("Failed writing to file\n");
-        exit(1);
-    }
+    write_to_file(out_fd, (char *)&bmp_image->header, HEADER_SIZE);
+
+    write_to_file(out_fd, buff, bmp_image->header.image_size_bytes); // TODO: si es para lsbi no hacer
 
     close(out_fd);
-    // free(buff);
+
     return buff;
 }
 
 
 static int lsb4(BMPImage_ptr bmp_image, char * embed_data, uint32_t embed_data_length, int out_fd) {
-    printf("LSB4\n");
-    if (embed_data_length * 2 > bmp_image->header.image_size_bytes) {
-        printf("Aflojale con el espacio rey\n");
-        exit(0);
-    }
+    if (embed_data_length * 2 > bmp_image->header.image_size_bytes)
+        log(FATAL, "Data to embed is too big for the image%s", "");
 
     char * buff = calloc(bmp_image->header.image_size_bytes, sizeof(char));
+    if (buff == NULL)
+        log(FATAL, "Could not allocate memory for BMPImage data%s", "");
+        
     memcpy(buff, bmp_image->data, bmp_image->header.image_size_bytes);
     int curr_byte = 0;
 
@@ -313,16 +288,13 @@ static int lsb4(BMPImage_ptr bmp_image, char * embed_data, uint32_t embed_data_l
     }
 
     int ret = write_to_file(out_fd, (char *)&bmp_image->header, HEADER_SIZE);
-    if (ret == -1) {
-        printf("Failed writing to file\n");
-        exit(1);
-    }
+    if (ret == -1)
+        log(FATAL, "Could not write to file%s", "");
+        
     ret = write_to_file(out_fd, buff, bmp_image->header.image_size_bytes);
-    if (ret == -1) {
-        printf("Failed writing to file\n");
-        exit(1);
-    }
-
+    if (ret == -1)
+        log(FATAL, "Could not write to file%s", "");
+        
     close(out_fd);
     free(buff);
     return 0;

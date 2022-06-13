@@ -22,8 +22,8 @@
 #include <openssl/aes.h>
 #include <openssl/des.h>
 
-#define ENCRYPTION 1
-#define DECRYPTION 0
+#define ENCRYPTION  1
+#define DECRYPTION  0
 
 char * encrypt(stegobmp_configuration_ptr config, char * data, uint32_t data_length, uint32_t * cipher_length, uint8_t is_encryption);
 
