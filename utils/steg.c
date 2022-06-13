@@ -45,7 +45,6 @@ typedef struct BMPImage {
 static uint8_t is_invalid_bmp(BMPImage_ptr bmp_image);
 static int lsb1(BMPImage_ptr bmp_image, char * embed_data, uint32_t embed_data_length, int out_fd);
 static int lsb4(BMPImage_ptr bmp_image, char * embed_data, uint32_t embed_data_length, int out_fd);
-static int write_to_file(int fd, const char * buff, int bytes);
 static char * lsb1_extract(BMPImage_ptr bmp_image, uint32_t * hidden_size);
 static char * lsb4_extract(BMPImage_ptr bmp_image, uint32_t * hidden_size);
 
@@ -326,17 +325,4 @@ static int lsb4(BMPImage_ptr bmp_image, char * embed_data, uint32_t embed_data_l
     close(out_fd);
     free(buff);
     return 0;
-}
-
-static int write_to_file(int fd, const char * buff, int bytes) {
-    int bytes_written = 0;
-    while (bytes_written < bytes) {
-        int bytes_to_write = write(fd, buff + bytes_written, bytes - bytes_written);
-        if (bytes_to_write == -1) {
-            perror("write");
-            return -1;
-        }
-        bytes_written += bytes_to_write;
-    }
-    return bytes_written;
 }

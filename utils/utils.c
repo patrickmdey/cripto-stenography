@@ -80,3 +80,17 @@ char * read_from_file(int fd, uint32_t * read_chars) {
     *read_chars = total_read_chars;
     return buff;
 }
+
+
+int write_to_file(int fd, const char * buff, int bytes) {
+    int bytes_written = 0;
+    while (bytes_written < bytes) {
+        int bytes_to_write = write(fd, buff + bytes_written, bytes - bytes_written);
+        if (bytes_to_write == -1) {
+            perror("write");
+            return -1;
+        }
+        bytes_written += bytes_to_write;
+    }
+    return bytes_written;
+}

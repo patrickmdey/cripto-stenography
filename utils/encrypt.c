@@ -107,6 +107,7 @@ char * encrypt(stegobmp_configuration_ptr config, char * data, uint32_t data_len
         uint32_t size = 0;
         memcpy(&size, cipher_result, sizeof(uint32_t));
         size = be32toh(size);
+        
         printf("Size de lo desencriptado: %d\n", size);
         memcpy(cipher_result, &size, sizeof(uint32_t));
     }

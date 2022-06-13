@@ -12,5 +12,7 @@
 
 char * itoa(int value, char *buffer, int base);
 char * read_from_file(int fd, uint32_t * read_chars);
+int write_to_file(int fd, const char * buff, int bytes);
+
 
 #endif
