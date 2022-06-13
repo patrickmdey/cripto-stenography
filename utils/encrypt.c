@@ -38,14 +38,16 @@ char * encrypt(stegobmp_configuration_ptr config, char * data, uint32_t data_len
     memset(concat, 0, concat_size);
 
     if (is_encryption) {
-        char * extension;
-        char * token;
-        token = strtok(config->in_file, ".");
+        // char * extension;
+        // char * token;
+        // token = strtok(config->in_file, ".");
 
-        while (token != NULL) {
-            extension = token;
-            token = strtok(NULL, ".");
-        }
+        // while (token != NULL) {
+        //     extension = token;
+        //     token = strtok(NULL, ".");
+        // }
+
+        char * extension = get_extension(config->in_file);
 
         concat_size = sizeof(uint32_t) + data_length + 1 + strlen(extension) + 1; // el + 1 es del . el otro es del 0 de la extension
 
@@ -53,12 +55,13 @@ char * encrypt(stegobmp_configuration_ptr config, char * data, uint32_t data_len
         memcpy(concat, &big_endian_size, sizeof(uint32_t));
         memcpy(concat + sizeof(uint32_t), data, data_length);
         // strcat(concat + sizeof(uint32_t), data);
-        memcpy(concat + sizeof(uint32_t) + data_length, ".", 1);
-        memcpy(concat + sizeof(uint32_t) + data_length + 1, extension, strlen(extension));
+        // memcpy(concat + sizeof(uint32_t) + data_length, ".", 1);
+        memcpy(concat + sizeof(uint32_t) + data_length, extension, strlen(extension)); //saque el +1 del punto ...+ data_length +1, ...
         // strcat(concat + sizeof(uint32_t) + data_length, ".");
         // strcat(concat + sizeof(uint32_t) + data_length + 1, extension);
         printf("El tamaño es %x\n", concat[3]);
         printf("Concat vale: %s\n", concat + sizeof(uint32_t));
+        free(extension);
     }
     else {
         concat_size = data_length;

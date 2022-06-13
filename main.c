@@ -1,5 +1,6 @@
 #include <parse_options.h>
 #include <fcntl.h>
+#include <utils.h>
 #include <decrypt.h>
 #include <encrypt.h>
 #include <extract.h>
@@ -8,8 +9,7 @@
 
 #define BUFF_INC 1024
 
-int main(int argc, char * argv[])
-{
+int main(int argc, char * argv[]) {
     stegobmp_configuration_ptr config = parse_options(argc, argv);
 
     if (config->is_embed) {
@@ -21,12 +21,16 @@ int main(int argc, char * argv[])
         uint32_t read_size = 0;
         char * data = read_from_file(in_fd, &read_size);
         // data[read_size] = 0;
+        // printf("%s\n", data);
         // embed in file
         if (config->password == NULL) {
             // Solo steg, no encripto
             printf("Steg only\n");
 
-            steg(config, data, read_size, ".txt");// TODO: parsear extension
+            char * extension = get_extension(config->in_file);
+            printf("Extension: %s\n", extension);
+            steg(config, data, read_size, extension);// TODO: parsear extension
+            free(extension);
         }
         else {
             // steg and encrypt
@@ -43,9 +47,9 @@ int main(int argc, char * argv[])
             printf("Cipher length: %d\n", cipher_length);
             printf("Cipher: %s\n", cipher);
 
-            steg(config, cipher, cipher_length, NULL); 
+            steg(config, cipher, cipher_length, NULL);
             free(cipher);
-            
+
             printf("Steg and encrypt\n"); //TODO logs despues
         }
 

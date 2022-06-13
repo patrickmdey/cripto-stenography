@@ -43,7 +43,7 @@ typedef struct BMPImage {
 #pragma pack(pop)
 
 static uint8_t is_invalid_bmp(BMPImage_ptr bmp_image);
-static int lsb1(BMPImage_ptr bmp_image, char * embed_data, uint32_t embed_data_length, int out_fd);
+static char * lsb1(BMPImage_ptr bmp_image, char * embed_data, uint32_t embed_data_length, int out_fd);
 static int lsb4(BMPImage_ptr bmp_image, char * embed_data, uint32_t embed_data_length, int out_fd);
 static char * lsb1_extract(BMPImage_ptr bmp_image, uint32_t * hidden_size);
 static char * lsb4_extract(BMPImage_ptr bmp_image, uint32_t * hidden_size);
@@ -115,7 +115,8 @@ int steg(stegobmp_configuration_ptr config, char * embed_data, uint32_t embed_da
     }
 
     if (strcmp(config->steg_algo, "LSB1") == 0) {
-        lsb1(bmp_image, hidden_data, hidden_size, out_fd);
+        char * out_data = lsb1(bmp_image, hidden_data, hidden_size, out_fd);
+        free(out_data);
     }
     else if (strcmp(config->steg_algo, "LSB4") == 0) {
         lsb4(bmp_image, hidden_data, hidden_size, out_fd);
@@ -259,7 +260,7 @@ static char * lsb4_extract(BMPImage_ptr bmp_image, uint32_t * hidden_size) {
     return hidden_data;
 }
 
-static int lsb1(BMPImage_ptr bmp_image, char * embed_data, uint32_t embed_data_length, int out_fd) {
+static char * lsb1(BMPImage_ptr bmp_image, char * embed_data, uint32_t embed_data_length, int out_fd) {
     if (embed_data_length * 8 > bmp_image->header.image_size_bytes) {
         printf("Aflojale con el espacio rey\n");
         exit(0);
@@ -288,8 +289,8 @@ static int lsb1(BMPImage_ptr bmp_image, char * embed_data, uint32_t embed_data_l
     }
 
     close(out_fd);
-    free(buff);
-    return 0;
+    // free(buff);
+    return buff;
 }
 
 
