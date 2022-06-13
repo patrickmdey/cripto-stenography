@@ -11,6 +11,7 @@
 
 int main(int argc, char * argv[]) {
     stegobmp_configuration_ptr config = parse_options(argc, argv);
+    uint8_t is_encryption = config->password != NULL ? ENCRYPTION : DECRYPTION;
 
     if (config->is_embed) {
         log(INFO, "Preparing to embed...%s", "");
@@ -23,7 +24,7 @@ int main(int argc, char * argv[]) {
 
         char * extension = NULL;
 
-        if (config->password == NULL) {
+        if (!is_encryption) {
             extension = get_extension(config->in_file);
         }
         else {
@@ -65,9 +66,10 @@ int main(int argc, char * argv[]) {
         uint32_t hidden_data_length = 0;
         char * hidden_data = NULL;
 
-        hidden_data = steg_extract(config, data, read_size, &hidden_data_length);
+        hidden_data = steg_extract(config, data, read_size, &hidden_data_length, is_encryption);
 
-        if (config->password != NULL) {
+        // printf("%s", hidden_data);
+        if (is_encryption) {
             log(INFO, "Decrypting hidden data%s", "");
             if (config->encryption_algo == NULL)
                 config->encryption_algo = "aes128";
@@ -76,20 +78,36 @@ int main(int argc, char * argv[]) {
                 config->encryption_mode = "cbc";
 
             uint32_t plain_size = 0;
-            char * plain_data = encrypt(config, hidden_data, hidden_data_length, &plain_size, DECRYPTION);
-            
+            char * plain_data = encrypt(config, hidden_data, hidden_data_length, &plain_size, DECRYPTION); //TODO: cambiar
+
             memcpy(hidden_data, plain_data, plain_size);
             free(plain_data);
             hidden_data_length = plain_size;
         }
 
-        int out_fd = open(config->out_file, O_WRONLY | O_CREAT, 0644);
+        char * extension = "";
+        if (!is_encryption) {
+            extension = get_extension(hidden_data);
+            printf("Extension is %s\n", extension);
+            // strcat(config->out_file, extension)
+            // free(extension);
+        }
+
+        char file_name[strlen(config->out_file) + strlen(extension) + 1];
+        strcpy(file_name, config->out_file);
+        strcat(file_name, extension);
+
+        if (!is_encryption) {
+            free(extension);
+        }
+
+        int out_fd = open(file_name, O_WRONLY | O_CREAT, 0644);
         if (out_fd == -1)
             log(FATAL, "Could not open output file %s", config->out_file);
 
-        // TODO: ver que hacemo, el + 4 es para ignorar el tamano, 
-        // falta sacarle la extension del final tmb pero necesito tenerla o al menos la longitud
-        write_to_file(out_fd, hidden_data + 4, hidden_data_length - 4);
+        // TODO: ver que hacemo, el + 4 es para ignorar el tamano Preguntar @tatu
+        // TODO: falta sacarle la extension del final tmb pero necesito tenerla o al menos la longitud
+        write_to_file(out_fd, hidden_data, hidden_data_length);
 
         close(out_fd);
 

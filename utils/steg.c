@@ -42,11 +42,11 @@ typedef struct BMPImage {
 
 #pragma pack(pop)
 
-static uint8_t is_invalid_bmp(BMPImage_ptr bmp_image);
-static char * lsb1(BMPImage_ptr bmp_image, char * embed_data, uint32_t embed_data_length, int out_fd);
-static int lsb4(BMPImage_ptr bmp_image, char * embed_data, uint32_t embed_data_length, int out_fd);
-static char * lsb1_extract(BMPImage_ptr bmp_image, uint32_t * hidden_size);
-static char * lsb4_extract(BMPImage_ptr bmp_image, uint32_t * hidden_size);
+static uint8_t  is_invalid_bmp(BMPImage_ptr bmp_image);
+static char *   lsb1(BMPImage_ptr bmp_image, char * embed_data, uint32_t embed_data_length, int out_fd);
+static int      lsb4(BMPImage_ptr bmp_image, char * embed_data, uint32_t embed_data_length, int out_fd);
+static char *   lsb1_extract(BMPImage_ptr bmp_image, uint32_t * hidden_size, uint8_t is_encryption);
+static char *   lsb4_extract(BMPImage_ptr bmp_image, uint32_t * hidden_size, uint8_t is_encryption);
 
 int steg(stegobmp_configuration_ptr config, char * embed_data, uint32_t embed_data_length, char * extension) {
     int carrier_fd = open(config->carrier_file, O_RDONLY);
@@ -101,7 +101,7 @@ int steg(stegobmp_configuration_ptr config, char * embed_data, uint32_t embed_da
     }
 
     if (strcmp(config->steg_algo, "LSB1") == 0) {
-        char * out_data = lsb1(bmp_image, hidden_data, hidden_size, out_fd); // TODO cambiar
+        char * out_data = lsb1(bmp_image, hidden_data, hidden_size, out_fd); // TODO: cambiar
         free(out_data);
     }
     else if (strcmp(config->steg_algo, "LSB4") == 0) {
@@ -119,7 +119,9 @@ int steg(stegobmp_configuration_ptr config, char * embed_data, uint32_t embed_da
     return 0;
 }
 
-char * steg_extract(stegobmp_configuration_ptr config, char * extract_data, uint32_t extract_data_length, uint32_t * hidden_size) {
+char * steg_extract(stegobmp_configuration_ptr config, char * extract_data, uint32_t extract_data_length, 
+                    uint32_t * hidden_size, uint8_t is_encryption) {
+
     BMPImage_ptr bmp_image = calloc(1, sizeof(BMPImage));
     if (bmp_image == NULL)
         log(FATAL, "Could not allocate memory for BMPImage%s", "");
@@ -132,11 +134,11 @@ char * steg_extract(stegobmp_configuration_ptr config, char * extract_data, uint
     memcpy(bmp_image->data, extract_data + HEADER_SIZE, extract_data_length - sizeof(BMPHeader));
 
     char * hidden_data;
-    if (strcmp(config->steg_algo, "LSB1") == 0) {
-        hidden_data = lsb1_extract(bmp_image, hidden_size);
+    if (strcmp(config->steg_algo, "LSB1") == 0) { // TODO: capaz pasar todo a un enum
+        hidden_data = lsb1_extract(bmp_image, hidden_size, is_encryption);
     }
     else if (strcmp(config->steg_algo, "LSB4") == 0) {
-        hidden_data = lsb4_extract(bmp_image, hidden_size);
+        hidden_data = lsb4_extract(bmp_image, hidden_size, is_encryption);
     }
     else if (strcmp(config->steg_algo, "LSBI") == 0) {
 
@@ -152,7 +154,7 @@ static uint8_t is_invalid_bmp(BMPImage_ptr bmp_image) {
         bmp_image->header.bits_per_pixel != BITS_PER_PIXEL;
 }
 
-static char * lsb1_extract(BMPImage_ptr bmp_image, uint32_t * hidden_size) {
+static char * lsb1_extract(BMPImage_ptr bmp_image, uint32_t * hidden_size, uint8_t is_encryption) {
     uint8_t byte = 0;
 
     uint8_t size_bytes[4];
@@ -171,7 +173,7 @@ static char * lsb1_extract(BMPImage_ptr bmp_image, uint32_t * hidden_size) {
     memcpy(hidden_size, size_bytes, sizeof(uint32_t));
     *hidden_size = be32toh(*hidden_size);
 
-    char * hidden_data = calloc(*hidden_size + 1, sizeof(char)); // + 1 para el 0
+    char * hidden_data = calloc(*hidden_size, sizeof(char));
 
     for (uint32_t i = 0; i < (*hidden_size) * 8; i++) {
         uint8_t bit = bmp_image->data[i + offset] & 1;
@@ -183,33 +185,34 @@ static char * lsb1_extract(BMPImage_ptr bmp_image, uint32_t * hidden_size) {
     }
 
     // Si no hay encripcion, el siguiente byte deberia ser un .
-    // seguido de extension\0
-    //char extension[8];
-    // TODO: if no esta encriptado
+    if(!is_encryption) {
+        char extension[8];
+        uint8_t found = 0;
+        offset += (*hidden_size) * 8;
 
-    // uint8_t found = 0;
-    // offset += (*hidden_size) * 8;
+        for (uint32_t i = 0; !found; i++) {
+            uint8_t bit = bmp_image->data[offset + i] & 1;
+            byte = (byte << 1) | bit;
+            if ((i + 1) % 8 == 0) {
+                extension[((i + 1) / 8) - 1] = byte;
 
-    // for (uint32_t i = 0; !found; i++) {
-    //     uint8_t bit = bmp_image->data[offset + i] & 1;
-    //     byte = (byte << 1) | bit;
-    //     // printf("Byte ahora vale %d \t ", byte);
-    //     if ((i + 1) % 8 == 0) {
-    //         if (byte == 0) {
-    //             found = 1;
-    //         }
+                if (byte == 0) {
+                    found = 1;
+                    hidden_data = realloc(hidden_data, *hidden_size + ((i + 1) / 8));
+                    memcpy(hidden_data + *hidden_size, extension, (i + 1) / 8);
+                    // printf("Hidden data was %s\n", hidden_data);
+                }
+                byte = 0;
+            }
+        }
+        if (found)
+            log(INFO, "Encrypted file has extension: %s", extension);
+    }
 
-    //         extension[((i + 1) / 8) - 1] = byte;
-    //         byte = 0;
-    //     }
-    // }
-
-    // if (found)
-    //     printf("Extension: %s\n", extension);
     return hidden_data;
 }
 
-static char * lsb4_extract(BMPImage_ptr bmp_image, uint32_t * hidden_size) {
+static char * lsb4_extract(BMPImage_ptr bmp_image, uint32_t * hidden_size, uint8_t is_encryption) {
     uint8_t byte = 0;
     uint8_t size_bytes[4];
 
