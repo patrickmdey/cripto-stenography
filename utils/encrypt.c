@@ -101,8 +101,11 @@ char * encrypt(stegobmp_configuration_ptr config, char * data, uint32_t data_len
     if (!is_encryption) {
         uint32_t size = 0;
         memcpy(&size, cipher_result, sizeof(uint32_t));
+        
         size = be32toh(size);
         memcpy(cipher_result, &size, sizeof(uint32_t));
+
+        cipher_result += sizeof(uint32_t);
     }
 
     EVP_CIPHER_CTX_free(ctx);

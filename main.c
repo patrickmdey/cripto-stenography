@@ -52,7 +52,6 @@ int main(int argc, char * argv[]) {
         log(INFO, "Embedding finished%s", "");
     }
     else {
-        // extract from file
         log(INFO, "Preparing to extract...%s", "");
 
         int in_fd = open(config->carrier_file, O_RDONLY);
@@ -68,7 +67,7 @@ int main(int argc, char * argv[]) {
 
         hidden_data = steg_extract(config, data, read_size, &hidden_data_length, is_encryption);
 
-        // printf("%s", hidden_data);
+
         if (is_encryption) {
             log(INFO, "Decrypting hidden data%s", "");
             if (config->encryption_algo == NULL)
@@ -85,27 +84,22 @@ int main(int argc, char * argv[]) {
             hidden_data_length = plain_size;
         }
 
-        char * extension = "";
-        if (!is_encryption) {
-            extension = get_extension(hidden_data);
-            printf("Extension is %s\n", extension);
-            // strcat(config->out_file, extension)
-            // free(extension);
-        }
+        char * extension = get_extension(hidden_data);
+        log(INFO, "Hidden file has extension: %s", extension);
 
         char file_name[strlen(config->out_file) + strlen(extension) + 1];
         strcpy(file_name, config->out_file);
         strcat(file_name, extension);
 
-        if (!is_encryption) {
-            free(extension);
-        }
+        free(extension);
 
         int out_fd = open(file_name, O_WRONLY | O_CREAT, 0644);
         if (out_fd == -1)
             log(FATAL, "Could not open output file %s", config->out_file);
 
         // TODO: ver que hacemo, el + 4 es para ignorar el tamano Preguntar @tatu
+        // El size no lo va a tener, el extract ya lo tiene en cuenta, pero hay que sacarlo en el decrypt
+
         // TODO: falta sacarle la extension del final tmb pero necesito tenerla o al menos la longitud
         write_to_file(out_fd, hidden_data, hidden_data_length);
 

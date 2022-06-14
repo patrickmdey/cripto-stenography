@@ -47,7 +47,7 @@ char * get_extension(char * string) {
         extension = token;
         token = strtok(NULL, ".");
     }
-    char * extension_copy = calloc(strlen(extension) + 2, sizeof(char));
+    char * extension_copy = calloc(strlen(extension) + 2, sizeof(char)); // TODO: podriamos hacer un arreglo del maximo tamaño posible
     strcpy(extension_copy, ".");
     strcat(extension_copy, extension);
     return extension_copy;

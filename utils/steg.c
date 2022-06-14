@@ -200,13 +200,10 @@ static char * lsb1_extract(BMPImage_ptr bmp_image, uint32_t * hidden_size, uint8
                     found = 1;
                     hidden_data = realloc(hidden_data, *hidden_size + ((i + 1) / 8));
                     memcpy(hidden_data + *hidden_size, extension, (i + 1) / 8);
-                    // printf("Hidden data was %s\n", hidden_data);
                 }
                 byte = 0;
             }
         }
-        if (found)
-            log(INFO, "Encrypted file has extension: %s", extension);
     }
 
     return hidden_data;
@@ -238,6 +235,28 @@ static char * lsb4_extract(BMPImage_ptr bmp_image, uint32_t * hidden_size, uint8
         if ((i + 1) % 2 == 0) {
             hidden_data[((i + 1) / 2) - 1] = byte;
             byte = 0;
+        }
+    }
+
+    // Si no hay encripcion, el siguiente byte deberia ser un .
+    if(!is_encryption) {
+        char extension[8];
+        uint8_t found = 0;
+        offset += (*hidden_size) * 8;
+
+        for (uint32_t i = 0; !found; i++) {
+            uint8_t bit = bmp_image->data[offset + i] & 0X0F;
+            byte = (byte << 4) | bit;
+            if ((i + 1) % 2 == 0) {
+                extension[((i + 1) / 2) - 1] = byte;
+
+                if (byte == 0) {
+                    found = 1;
+                    hidden_data = realloc(hidden_data, *hidden_size + ((i + 1) / 2));
+                    memcpy(hidden_data + *hidden_size, extension, (i + 1) / 2);
+                }
+                byte = 0;
+            }
         }
     }
 
