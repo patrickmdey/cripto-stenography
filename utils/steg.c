@@ -47,6 +47,8 @@ static char *   lsb1(BMPImage_ptr bmp_image, char * embed_data, uint32_t embed_d
 static int      lsb4(BMPImage_ptr bmp_image, char * embed_data, uint32_t embed_data_length, int out_fd);
 static char *   lsb1_extract(BMPImage_ptr bmp_image, uint32_t * hidden_size, uint8_t is_encryption);
 static char *   lsb4_extract(BMPImage_ptr bmp_image, uint32_t * hidden_size, uint8_t is_encryption);
+static char *   lsbi_extract(BMPImage_ptr bmp_image, uint32_t * hidden_size, uint8_t is_encryption);
+
 
 int steg(stegobmp_configuration_ptr config, char * embed_data, uint32_t embed_data_length, char * extension) {
     int carrier_fd = open(config->carrier_file, O_RDONLY);
@@ -134,14 +136,13 @@ char * steg_extract(stegobmp_configuration_ptr config, char * extract_data, uint
     memcpy(bmp_image->data, extract_data + HEADER_SIZE, extract_data_length - sizeof(BMPHeader));
 
     char * hidden_data;
+
     if (strcmp(config->steg_algo, "LSB1") == 0) { // TODO: capaz pasar todo a un enum
         hidden_data = lsb1_extract(bmp_image, hidden_size, is_encryption);
-    }
-    else if (strcmp(config->steg_algo, "LSB4") == 0) {
+    } else if (strcmp(config->steg_algo, "LSB4") == 0) {
         hidden_data = lsb4_extract(bmp_image, hidden_size, is_encryption);
-    }
-    else if (strcmp(config->steg_algo, "LSBI") == 0) {
-
+    } else if (strcmp(config->steg_algo, "LSBI") == 0) {
+        hidden_data = lsbi_extract(bmp_image, hidden_size, is_encryption);
     }
 
     free(bmp_image->data);
@@ -206,6 +207,7 @@ static char * lsb1_extract(BMPImage_ptr bmp_image, uint32_t * hidden_size, uint8
         }
     }
 
+
     return hidden_data;
 }
 
@@ -254,6 +256,92 @@ static char * lsb4_extract(BMPImage_ptr bmp_image, uint32_t * hidden_size, uint8
                     found = 1;
                     hidden_data = realloc(hidden_data, *hidden_size + ((i + 1) / 2));
                     memcpy(hidden_data + *hidden_size, extension, (i + 1) / 2);
+                }
+                byte = 0;
+            }
+        }
+    }
+
+    return hidden_data;
+}
+
+static char * lsbi_extract(BMPImage_ptr bmp_image, uint32_t * hidden_size, uint8_t is_encryption) {
+    uint8_t byte = 0;
+    uint8_t size_bytes[4];
+
+    uint8_t is_inverted[4] = {0};
+
+    // 00b = 0, 01b = 1, 10b = 2, 11b = 3
+    for (uint32_t i = 0; i < 4; i++)
+        is_inverted[i] = bmp_image->data[i] & 1;
+    
+
+    // TODO: ver si va, es pq leo de der a izq en vez de izq a der
+    uint8_t aux = is_inverted[1];
+    is_inverted[1] = is_inverted[2];
+    is_inverted[2] = aux;
+
+    uint32_t offset = 4;
+
+    uint8_t bit, pattern;
+    for (uint32_t i = 0; i < sizeof(uint32_t) * 8; i++) {
+        bit = bmp_image->data[offset + i] & 1;
+        pattern = (bmp_image->data[offset + i] & 6) >> 1; // 6 = 110b
+        if (is_inverted[pattern])
+            bit = 1 - bit;
+
+        byte = (byte << 1) | bit;
+        if ((i + 1) % 8 == 0) {
+            size_bytes[((i + 1) / 8) - 1] = byte;
+            byte = 0;
+        }
+    }
+
+    offset += sizeof(uint32_t) * 8;
+
+    memcpy(hidden_size, size_bytes, sizeof(uint32_t));
+    *hidden_size = be32toh(*hidden_size);
+
+    char * hidden_data = calloc(*hidden_size + 1, sizeof(char)); // TODO: ver + 1 para el 0
+
+    for (uint32_t i = 0; i < (*hidden_size) * 8; i++) {
+        bit = bmp_image->data[offset + i] & 1;
+        
+        pattern = (bmp_image->data[offset + i] & 6) >> 1; // 6 = 110b
+        if (is_inverted[pattern])
+            bit = 1 - bit;
+
+        byte = (byte << 1) | bit;
+        if ((i + 1) % 8 == 0) {
+            hidden_data[((i + 1) / 8) - 1] = byte;
+            byte = 0;
+        }
+    }
+
+    // Si no hay encripcion, el siguiente byte deberia ser un .
+    if(!is_encryption) {
+        char extension[8];
+        uint8_t found = 0;
+        offset += (*hidden_size) * 8;
+        
+        for (uint32_t i = 0; !found; i++) {
+            bit = bmp_image->data[offset + i] & 1;
+
+            // printf("Offset is %d\n", offset + i); 
+            pattern = (bmp_image->data[offset + i] & 6) >> 1; // 6 = 110b
+            if (is_inverted[pattern])
+                bit = 1 - bit;
+
+            byte = (byte << 1) | bit;
+            if ((i + 1) % 8 == 0) {
+                printf("%c\n", byte);
+
+                extension[((i + 1) / 8) - 1] = byte;
+                if (byte == 0) {
+                    printf("Found\n");
+                    found = 1;
+                    hidden_data = realloc(hidden_data, *hidden_size + ((i + 1) / 8));
+                    memcpy(hidden_data + *hidden_size, extension, (i + 1) / 8);
                 }
                 byte = 0;
             }

@@ -67,7 +67,7 @@ int main(int argc, char * argv[]) {
 
         hidden_data = steg_extract(config, data, read_size, &hidden_data_length, is_encryption);
 
-
+        char * extension;
         if (is_encryption) {
             log(INFO, "Decrypting hidden data%s", "");
             if (config->encryption_algo == NULL)
@@ -78,13 +78,19 @@ int main(int argc, char * argv[]) {
 
             uint32_t plain_size = 0;
             char * plain_data = encrypt(config, hidden_data, hidden_data_length, &plain_size, DECRYPTION); //TODO: cambiar
+            
+            memcpy(hidden_data, plain_data + sizeof(uint32_t), plain_size);
+            extension = get_extension(plain_data + plain_size + sizeof(uint32_t));
 
-            memcpy(hidden_data, plain_data, plain_size);
             free(plain_data);
             hidden_data_length = plain_size;
+        } else {
+            extension = get_extension(hidden_data + hidden_data_length);
         }
 
-        char * extension = get_extension(hidden_data);
+        // // TODO: Ver como parseamos la extension aca
+        // char * extension = get_extension(hidden_data + hidden_data_length);
+
         log(INFO, "Hidden file has extension: %s", extension);
 
         char file_name[strlen(config->out_file) + strlen(extension) + 1];
