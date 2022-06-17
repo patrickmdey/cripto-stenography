@@ -101,17 +101,17 @@ char * encrypt(stegobmp_configuration_ptr config, char * data, uint32_t data_len
     if (!is_encryption) {
         uint32_t size = 0;
         memcpy(&size, cipher_result, sizeof(uint32_t));
-        
+
         size = be32toh(size);
         *cipher_length = size;
-    } else {
+    }
+    else {
         *cipher_length = cipher_result_length + last_block_length;
     }
 
-
     EVP_CIPHER_CTX_free(ctx);
-    
-    return (char *) cipher_result;
+
+    return (char *)cipher_result;
 }
 
 static int set_encrypt_algo(const char * encryption_algo, int * key_size) {

@@ -179,6 +179,10 @@ static char * lsb1_extract(BMPImage_ptr bmp_image, uint32_t * hidden_size, uint8
     memcpy(hidden_size, size_bytes, sizeof(uint32_t));
     *hidden_size = be32toh(*hidden_size);
 
+    if (*hidden_size > bmp_image->header.image_size_bytes - offset) {
+        log(FATAL, "Invalid stegged size. Hidden data %d size is bigger than image size", *hidden_size);
+    }
+
     char * hidden_data = calloc(*hidden_size, sizeof(char));
 
     for (uint32_t i = 0; i < (*hidden_size) * 8; i++) {
@@ -234,6 +238,10 @@ static char * lsb4_extract(BMPImage_ptr bmp_image, uint32_t * hidden_size, uint8
     memcpy(hidden_size, size_bytes, sizeof(uint32_t));
     *hidden_size = be32toh(*hidden_size);
 
+    if (*hidden_size > bmp_image->header.image_size_bytes - offset) {
+        log(FATAL, "Invalid stegged size. Hidden data %d size is bigger than image size", *hidden_size);
+    }
+
     char * hidden_data = calloc(*hidden_size + 1, sizeof(char)); // + 1 para el 0
 
     for (uint32_t i = 0; i < *hidden_size * 2; i++) {
@@ -282,9 +290,12 @@ static char * lsbi_extract(BMPImage_ptr bmp_image, uint32_t * hidden_size, uint8
 
 
     // TODO: ver si va, es pq leo de der a izq en vez de izq a der
-    uint8_t aux = is_inverted[1];
-    is_inverted[1] = is_inverted[2];
-    is_inverted[2] = aux;
+    // uint8_t aux = is_inverted[1];
+    // is_inverted[1] = is_inverted[2];
+    // is_inverted[2] = aux;
+
+    log(INFO, "Is inverted: %d, %d, %d, %d\n", is_inverted[0], is_inverted[1], is_inverted[2], is_inverted[3]);
+
 
     uint32_t offset = 4;
 
@@ -306,6 +317,10 @@ static char * lsbi_extract(BMPImage_ptr bmp_image, uint32_t * hidden_size, uint8
 
     memcpy(hidden_size, size_bytes, sizeof(uint32_t));
     *hidden_size = be32toh(*hidden_size);
+
+    if (*hidden_size > bmp_image->header.image_size_bytes - offset) {
+        log(FATAL, "Invalid stegged size. Hidden data %d size is bigger than image size", *hidden_size);
+    }
 
     char * hidden_data = calloc(*hidden_size + 1, sizeof(char)); // TODO: ver + 1 para el 0
 
@@ -416,25 +431,25 @@ static int lsb4(BMPImage_ptr bmp_image, char * embed_data, uint32_t embed_data_l
 }
 
 static int lsbi(BMPImage_ptr bmp_image, char * embed_data, uint32_t embed_data_length, int out_fd) {
-    if (embed_data_length * 8 > bmp_image->header.image_size_bytes)
+    if (embed_data_length * 8 + 4 > bmp_image->header.image_size_bytes)
         log(FATAL, "Data to embed is too big for the image%s", "");
 
     int pattern_counter[4] = { 0 };
     uint8_t is_inverted[4] = { 0 };
 
+    bmp_image->data += 4;
+    bmp_image->header.image_size_bytes -= 4;
+    
     char * steg_image = lsb1(bmp_image, embed_data, embed_data_length, out_fd, 0);
+
+
     log(INFO, "Steged image...%s", "");
 
 
     uint8_t pattern;
     for (uint32_t i = 0; i < bmp_image->header.image_size_bytes; i++) {
         pattern = (bmp_image->data[i] & PATTERN_MASK) >> 1;
-        if ((bmp_image->data[i] & 1) != (steg_image[i] & 1)) {
-            pattern_counter[pattern]++;
-        }
-        else {
-            pattern_counter[pattern]--;
-        }
+        pattern_counter[pattern] += ((bmp_image->data[i] & 1) != (steg_image[i] & 1)) ? 1 : -1;
     }
 
     for (uint8_t i = 0; i < 4; i++) {
@@ -443,6 +458,7 @@ static int lsbi(BMPImage_ptr bmp_image, char * embed_data, uint32_t embed_data_l
             is_inverted[i] = 1;
         }
     }
+
     log(INFO, "Is inverted: %d, %d, %d, %d\n", is_inverted[0], is_inverted[1], is_inverted[2], is_inverted[3]);
 
     uint8_t bit;
@@ -454,9 +470,21 @@ static int lsbi(BMPImage_ptr bmp_image, char * embed_data, uint32_t embed_data_l
         }
     }
 
+    bmp_image->data -= 4;
+    bmp_image->header.image_size_bytes += 4;
+
+
     write_to_file(out_fd, (char *)&bmp_image->header, HEADER_SIZE);
-    write_to_file(out_fd, (char *)is_inverted, sizeof(uint32_t));
-    write_to_file(out_fd, steg_image, bmp_image->header.image_size_bytes);
+
+    char inverted_bytes[4] = { 0 };
+    for (int i = 0; i < 4; i++)
+        inverted_bytes[i] = (bmp_image->data[i] & LSB1_MASK) | (is_inverted[i]);
+
+    write_to_file(out_fd, inverted_bytes, 4);
+
+    write_to_file(out_fd, steg_image, bmp_image->header.image_size_bytes - 4);
+
+
     close(out_fd);
     free(steg_image);
     return 0;
