@@ -9,6 +9,7 @@
 
 #define LSB1_MASK 0xFE
 #define LSB4_MASK 0xF0
+#define PATTERN_MASK 0x06 // 0000 0110
 
 #pragma pack(push, 1)
 
@@ -43,11 +44,12 @@ typedef struct BMPImage {
 #pragma pack(pop)
 
 static uint8_t  is_invalid_bmp(BMPImage_ptr bmp_image);
-static char *   lsb1(BMPImage_ptr bmp_image, char * embed_data, uint32_t embed_data_length, int out_fd);
-static int      lsb4(BMPImage_ptr bmp_image, char * embed_data, uint32_t embed_data_length, int out_fd);
-static char *   lsb1_extract(BMPImage_ptr bmp_image, uint32_t * hidden_size, uint8_t is_encryption);
-static char *   lsb4_extract(BMPImage_ptr bmp_image, uint32_t * hidden_size, uint8_t is_encryption);
-static char *   lsbi_extract(BMPImage_ptr bmp_image, uint32_t * hidden_size, uint8_t is_encryption);
+static char * lsb1(BMPImage_ptr bmp_image, char * embed_data, uint32_t embed_data_length, int out_fd, uint8_t writes_to_file);
+static int lsb4(BMPImage_ptr bmp_image, char * embed_data, uint32_t embed_data_length, int out_fd);
+static int lsbi(BMPImage_ptr bmp_image, char * embed_data, uint32_t embed_data_length, int out_fd);
+static char * lsb1_extract(BMPImage_ptr bmp_image, uint32_t * hidden_size, uint8_t is_encryption);
+static char * lsb4_extract(BMPImage_ptr bmp_image, uint32_t * hidden_size, uint8_t is_encryption);
+static char * lsbi_extract(BMPImage_ptr bmp_image, uint32_t * hidden_size, uint8_t is_encryption);
 
 
 int steg(stegobmp_configuration_ptr config, char * embed_data, uint32_t embed_data_length, char * extension) {
@@ -103,13 +105,14 @@ int steg(stegobmp_configuration_ptr config, char * embed_data, uint32_t embed_da
     }
 
     if (strcmp(config->steg_algo, "LSB1") == 0) {
-        char * out_data = lsb1(bmp_image, hidden_data, hidden_size, out_fd); // TODO: cambiar
+        char * out_data = lsb1(bmp_image, hidden_data, hidden_size, out_fd, 1); // TODO: cambiar
         free(out_data);
     }
     else if (strcmp(config->steg_algo, "LSB4") == 0) {
         lsb4(bmp_image, hidden_data, hidden_size, out_fd);
     }
     else if (strcmp(config->steg_algo, "LSBI") == 0) {
+        lsbi(bmp_image, hidden_data, hidden_size, out_fd);
     }
     else {
         log(FATAL, "Invalid steg algorithm: %s", config->steg_algo);
@@ -121,8 +124,8 @@ int steg(stegobmp_configuration_ptr config, char * embed_data, uint32_t embed_da
     return 0;
 }
 
-char * steg_extract(stegobmp_configuration_ptr config, char * extract_data, uint32_t extract_data_length, 
-                    uint32_t * hidden_size, uint8_t is_encryption) {
+char * steg_extract(stegobmp_configuration_ptr config, char * extract_data, uint32_t extract_data_length,
+    uint32_t * hidden_size, uint8_t is_encryption) {
 
     BMPImage_ptr bmp_image = calloc(1, sizeof(BMPImage));
     if (bmp_image == NULL)
@@ -139,9 +142,11 @@ char * steg_extract(stegobmp_configuration_ptr config, char * extract_data, uint
 
     if (strcmp(config->steg_algo, "LSB1") == 0) { // TODO: capaz pasar todo a un enum
         hidden_data = lsb1_extract(bmp_image, hidden_size, is_encryption);
-    } else if (strcmp(config->steg_algo, "LSB4") == 0) {
+    }
+    else if (strcmp(config->steg_algo, "LSB4") == 0) {
         hidden_data = lsb4_extract(bmp_image, hidden_size, is_encryption);
-    } else if (strcmp(config->steg_algo, "LSBI") == 0) {
+    }
+    else if (strcmp(config->steg_algo, "LSBI") == 0) {
         hidden_data = lsbi_extract(bmp_image, hidden_size, is_encryption);
     }
 
@@ -186,7 +191,7 @@ static char * lsb1_extract(BMPImage_ptr bmp_image, uint32_t * hidden_size, uint8
     }
 
     // Si no hay encripcion, el siguiente byte deberia ser un .
-    if(!is_encryption) {
+    if (!is_encryption) {
         char extension[8];
         uint8_t found = 0;
         offset += (*hidden_size) * 8;
@@ -241,7 +246,7 @@ static char * lsb4_extract(BMPImage_ptr bmp_image, uint32_t * hidden_size, uint8
     }
 
     // Si no hay encripcion, el siguiente byte deberia ser un .
-    if(!is_encryption) {
+    if (!is_encryption) {
         char extension[8];
         uint8_t found = 0;
         offset += (*hidden_size) * 8;
@@ -269,12 +274,12 @@ static char * lsbi_extract(BMPImage_ptr bmp_image, uint32_t * hidden_size, uint8
     uint8_t byte = 0;
     uint8_t size_bytes[4];
 
-    uint8_t is_inverted[4] = {0};
+    uint8_t is_inverted[4] = { 0 };
 
     // 00b = 0, 01b = 1, 10b = 2, 11b = 3
     for (uint32_t i = 0; i < 4; i++)
         is_inverted[i] = bmp_image->data[i] & 1;
-    
+
 
     // TODO: ver si va, es pq leo de der a izq en vez de izq a der
     uint8_t aux = is_inverted[1];
@@ -286,7 +291,7 @@ static char * lsbi_extract(BMPImage_ptr bmp_image, uint32_t * hidden_size, uint8
     uint8_t bit, pattern;
     for (uint32_t i = 0; i < sizeof(uint32_t) * 8; i++) {
         bit = bmp_image->data[offset + i] & 1;
-        pattern = (bmp_image->data[offset + i] & 6) >> 1; // 6 = 110b
+        pattern = (bmp_image->data[offset + i] & PATTERN_MASK) >> 1; // 6 = 110b
         if (is_inverted[pattern])
             bit = 1 - bit;
 
@@ -306,8 +311,8 @@ static char * lsbi_extract(BMPImage_ptr bmp_image, uint32_t * hidden_size, uint8
 
     for (uint32_t i = 0; i < (*hidden_size) * 8; i++) {
         bit = bmp_image->data[offset + i] & 1;
-        
-        pattern = (bmp_image->data[offset + i] & 6) >> 1; // 6 = 110b
+
+        pattern = (bmp_image->data[offset + i] & PATTERN_MASK) >> 1; // 6 = 110b
         if (is_inverted[pattern])
             bit = 1 - bit;
 
@@ -319,16 +324,16 @@ static char * lsbi_extract(BMPImage_ptr bmp_image, uint32_t * hidden_size, uint8
     }
 
     // Si no hay encripcion, el siguiente byte deberia ser un .
-    if(!is_encryption) {
+    if (!is_encryption) {
         char extension[8];
         uint8_t found = 0;
         offset += (*hidden_size) * 8;
-        
+
         for (uint32_t i = 0; !found; i++) {
             bit = bmp_image->data[offset + i] & 1;
 
             // printf("Offset is %d\n", offset + i); 
-            pattern = (bmp_image->data[offset + i] & 6) >> 1; // 6 = 110b
+            pattern = (bmp_image->data[offset + i] & PATTERN_MASK) >> 1; // 6 = 110b
             if (is_inverted[pattern])
                 bit = 1 - bit;
 
@@ -351,7 +356,7 @@ static char * lsbi_extract(BMPImage_ptr bmp_image, uint32_t * hidden_size, uint8
     return hidden_data;
 }
 
-static char * lsb1(BMPImage_ptr bmp_image, char * embed_data, uint32_t embed_data_length, int out_fd) {
+static char * lsb1(BMPImage_ptr bmp_image, char * embed_data, uint32_t embed_data_length, int out_fd, uint8_t writes_to_file) {
     if (embed_data_length * 8 > bmp_image->header.image_size_bytes)
         log(FATAL, "Data to embed is too big for the image%s", "");
 
@@ -369,11 +374,11 @@ static char * lsb1(BMPImage_ptr bmp_image, char * embed_data, uint32_t embed_dat
         }
     }
 
-    write_to_file(out_fd, (char *)&bmp_image->header, HEADER_SIZE);
-
-    write_to_file(out_fd, buff, bmp_image->header.image_size_bytes); // TODO: si es para lsbi no hacer
-
-    close(out_fd);
+    if (writes_to_file) {
+        write_to_file(out_fd, (char *)&bmp_image->header, HEADER_SIZE);
+        write_to_file(out_fd, buff, bmp_image->header.image_size_bytes); // TODO: si es para lsbi no hacer
+        close(out_fd);
+    }
 
     return buff;
 }
@@ -386,7 +391,7 @@ static int lsb4(BMPImage_ptr bmp_image, char * embed_data, uint32_t embed_data_l
     char * buff = calloc(bmp_image->header.image_size_bytes, sizeof(char));
     if (buff == NULL)
         log(FATAL, "Could not allocate memory for BMPImage data%s", "");
-        
+
     memcpy(buff, bmp_image->data, bmp_image->header.image_size_bytes);
     int curr_byte = 0;
 
@@ -400,12 +405,60 @@ static int lsb4(BMPImage_ptr bmp_image, char * embed_data, uint32_t embed_data_l
     int ret = write_to_file(out_fd, (char *)&bmp_image->header, HEADER_SIZE);
     if (ret == -1)
         log(FATAL, "Could not write to file%s", "");
-        
+
     ret = write_to_file(out_fd, buff, bmp_image->header.image_size_bytes);
     if (ret == -1)
         log(FATAL, "Could not write to file%s", "");
-        
+
     close(out_fd);
     free(buff);
     return 0;
+}
+
+static int lsbi(BMPImage_ptr bmp_image, char * embed_data, uint32_t embed_data_length, int out_fd) {
+    if (embed_data_length * 8 > bmp_image->header.image_size_bytes)
+        log(FATAL, "Data to embed is too big for the image%s", "");
+
+    int pattern_counter[4] = { 0 };
+    uint8_t is_inverted[4] = { 0 };
+
+    char * steg_image = lsb1(bmp_image, embed_data, embed_data_length, out_fd, 0);
+    log(INFO, "Steged image...%s", "");
+
+
+    uint8_t pattern;
+    for (uint32_t i = 0; i < bmp_image->header.image_size_bytes; i++) {
+        pattern = (bmp_image->data[i] & PATTERN_MASK) >> 1;
+        if ((bmp_image->data[i] & 1) != (steg_image[i] & 1)) {
+            pattern_counter[pattern]++;
+        }
+        else {
+            pattern_counter[pattern]--;
+        }
+    }
+
+    for (uint8_t i = 0; i < 4; i++) {
+        if (pattern_counter[i] > 0) {
+            log(INFO, "Pattern %d is inverted", i);
+            is_inverted[i] = 1;
+        }
+    }
+    log(INFO, "Is inverted: %d, %d, %d, %d\n", is_inverted[0], is_inverted[1], is_inverted[2], is_inverted[3]);
+
+    uint8_t bit;
+    for (uint32_t i = 0; i < bmp_image->header.image_size_bytes; i++) {
+        pattern = (steg_image[i] & PATTERN_MASK) >> 1;
+        if (is_inverted[pattern]) {
+            bit = steg_image[i] & 1;
+            steg_image[i] = (steg_image[i] & LSB1_MASK) | (1 - bit);
+        }
+    }
+
+    write_to_file(out_fd, (char *)&bmp_image->header, HEADER_SIZE);
+    write_to_file(out_fd, (char *)is_inverted, sizeof(uint32_t));
+    write_to_file(out_fd, steg_image, bmp_image->header.image_size_bytes);
+    close(out_fd);
+    free(steg_image);
+    return 0;
+
 }

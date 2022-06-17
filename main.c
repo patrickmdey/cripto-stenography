@@ -78,13 +78,14 @@ int main(int argc, char * argv[]) {
 
             uint32_t plain_size = 0;
             char * plain_data = encrypt(config, hidden_data, hidden_data_length, &plain_size, DECRYPTION); //TODO: cambiar
-            
+
             memcpy(hidden_data, plain_data + sizeof(uint32_t), plain_size);
             extension = get_extension(plain_data + plain_size + sizeof(uint32_t));
 
             free(plain_data);
             hidden_data_length = plain_size;
-        } else {
+        }
+        else {
             extension = get_extension(hidden_data + hidden_data_length);
         }
 
