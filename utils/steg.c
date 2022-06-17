@@ -396,7 +396,7 @@ static int lsb4(BMPImage_ptr bmp_image, char * embed_data, uint32_t embed_data_l
     int curr_byte = 0;
 
     for (uint32_t i = 0; i < embed_data_length; i++) {
-        for (int j = 1; j >= 0; j++, curr_byte++) {
+        for (int j = 1; j >= 0; j--, curr_byte++) {
             uint8_t bits = (embed_data[i] >> (j * 4)) & 0x0F;
             buff[curr_byte] = (bmp_image->data[curr_byte] & LSB4_MASK) | (bits);
         }
