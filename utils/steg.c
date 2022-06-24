@@ -105,7 +105,7 @@ int steg(stegobmp_configuration_ptr config, char * embed_data, uint32_t embed_da
     }
 
     if (strcmp(config->steg_algo, "LSB1") == 0) {
-        char * out_data = lsb1(bmp_image, hidden_data, hidden_size, out_fd, 1); // TODO: cambiar
+        char * out_data = lsb1(bmp_image, hidden_data, hidden_size, out_fd, 1);
         free(out_data);
     }
     else if (strcmp(config->steg_algo, "LSB4") == 0) {
@@ -140,7 +140,7 @@ char * steg_extract(stegobmp_configuration_ptr config, char * extract_data, uint
 
     char * hidden_data;
 
-    if (strcmp(config->steg_algo, "LSB1") == 0) { // TODO: capaz pasar todo a un enum
+    if (strcmp(config->steg_algo, "LSB1") == 0) { 
         hidden_data = lsb1_extract(bmp_image, hidden_size, is_encryption);
     }
     else if (strcmp(config->steg_algo, "LSB4") == 0) {
@@ -288,12 +288,6 @@ static char * lsbi_extract(BMPImage_ptr bmp_image, uint32_t * hidden_size, uint8
     for (uint32_t i = 0; i < 4; i++)
         is_inverted[i] = bmp_image->data[i] & 1;
 
-
-    // TODO: ver si va, es pq leo de der a izq en vez de izq a der
-    // uint8_t aux = is_inverted[1];
-    // is_inverted[1] = is_inverted[2];
-    // is_inverted[2] = aux;
-
     log(INFO, "Is inverted: %d, %d, %d, %d\n", is_inverted[0], is_inverted[1], is_inverted[2], is_inverted[3]);
 
 
@@ -322,7 +316,7 @@ static char * lsbi_extract(BMPImage_ptr bmp_image, uint32_t * hidden_size, uint8
         log(FATAL, "Invalid stegged size. Hidden data %d size is bigger than image size", *hidden_size);
     }
 
-    char * hidden_data = calloc(*hidden_size + 1, sizeof(char)); // TODO: ver + 1 para el 0
+    char * hidden_data = calloc(*hidden_size + 1, sizeof(char));
 
     for (uint32_t i = 0; i < (*hidden_size) * 8; i++) {
         bit = bmp_image->data[offset + i] & 1;
@@ -391,7 +385,7 @@ static char * lsb1(BMPImage_ptr bmp_image, char * embed_data, uint32_t embed_dat
 
     if (writes_to_file) {
         write_to_file(out_fd, (char *)&bmp_image->header, HEADER_SIZE);
-        write_to_file(out_fd, buff, bmp_image->header.image_size_bytes); // TODO: si es para lsbi no hacer
+        write_to_file(out_fd, buff, bmp_image->header.image_size_bytes);
         close(out_fd);
     }
 

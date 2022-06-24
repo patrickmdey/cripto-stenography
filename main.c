@@ -8,10 +8,17 @@
 
 #define BUFF_INC 1024
 
+int check_config(stegobmp_configuration_ptr config) {
+    return config->steg_algo != NULL && config->out_file != NULL && config->carrier_file != NULL &&
+            ((config->is_embed && config->in_file != NULL) || !config->is_embed);
+}
 
 int main(int argc, char * argv[]) {
     stegobmp_configuration_ptr config = parse_options(argc, argv);
     uint8_t is_encryption = config->password != NULL ? ENCRYPTION : DECRYPTION;
+
+    if (!check_config(config))
+        log(FATAL, "Invalid arguments, please use help: ./stegobmp -help %s", "");
 
     if (config->is_embed) {
         log(INFO, "Preparing to embed...%s", "");
@@ -77,7 +84,7 @@ int main(int argc, char * argv[]) {
                 config->encryption_mode = "cbc";
 
             uint32_t plain_size = 0;
-            char * plain_data = encrypt(config, hidden_data, hidden_data_length, &plain_size, DECRYPTION); //TODO: cambiar
+            char * plain_data = encrypt(config, hidden_data, hidden_data_length, &plain_size, DECRYPTION);
 
             memcpy(hidden_data, plain_data + sizeof(uint32_t), plain_size);
             extension = get_extension(plain_data + plain_size + sizeof(uint32_t));
@@ -88,9 +95,6 @@ int main(int argc, char * argv[]) {
         else {
             extension = get_extension(hidden_data + hidden_data_length);
         }
-
-        // // TODO: Ver como parseamos la extension aca
-        // char * extension = get_extension(hidden_data + hidden_data_length);
 
         log(INFO, "Hidden file has extension: %s", extension);
 
@@ -104,10 +108,6 @@ int main(int argc, char * argv[]) {
         if (out_fd == -1)
             log(FATAL, "Could not open output file %s", config->out_file);
 
-        // TODO: ver que hacemo, el + 4 es para ignorar el tamano Preguntar @tatu
-        // El size no lo va a tener, el extract ya lo tiene en cuenta, pero hay que sacarlo en el decrypt
-
-        // TODO: falta sacarle la extension del final tmb pero necesito tenerla o al menos la longitud
         write_to_file(out_fd, hidden_data, hidden_data_length);
 
         close(out_fd);
