@@ -140,7 +140,7 @@ char * steg_extract(stegobmp_configuration_ptr config, char * extract_data, uint
 
     char * hidden_data;
 
-    if (strcmp(config->steg_algo, "LSB1") == 0) { 
+    if (strcmp(config->steg_algo, "LSB1") == 0) {
         hidden_data = lsb1_extract(bmp_image, hidden_size, is_encryption);
     }
     else if (strcmp(config->steg_algo, "LSB4") == 0) {
@@ -433,7 +433,7 @@ static int lsbi(BMPImage_ptr bmp_image, char * embed_data, uint32_t embed_data_l
 
     bmp_image->data += 4;
     bmp_image->header.image_size_bytes -= 4;
-    
+
     char * steg_image = lsb1(bmp_image, embed_data, embed_data_length, out_fd, 0);
 
 
@@ -441,7 +441,7 @@ static int lsbi(BMPImage_ptr bmp_image, char * embed_data, uint32_t embed_data_l
 
 
     uint8_t pattern;
-    for (uint32_t i = 0; i < bmp_image->header.image_size_bytes; i++) {
+    for (uint32_t i = 0; i < embed_data_length * 8; i++) {
         pattern = (bmp_image->data[i] & PATTERN_MASK) >> 1;
         pattern_counter[pattern] += ((bmp_image->data[i] & 1) != (steg_image[i] & 1)) ? 1 : -1;
     }
@@ -456,7 +456,7 @@ static int lsbi(BMPImage_ptr bmp_image, char * embed_data, uint32_t embed_data_l
     log(INFO, "Is inverted: %d, %d, %d, %d\n", is_inverted[0], is_inverted[1], is_inverted[2], is_inverted[3]);
 
     uint8_t bit;
-    for (uint32_t i = 0; i < bmp_image->header.image_size_bytes; i++) {
+    for (uint32_t i = 0; i < embed_data_length * 8; i++) {
         pattern = (steg_image[i] & PATTERN_MASK) >> 1;
         if (is_inverted[pattern]) {
             bit = steg_image[i] & 1;
